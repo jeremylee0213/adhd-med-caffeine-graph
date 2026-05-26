@@ -521,6 +521,29 @@ input[type="range"] {
   grid-column: 1 / -1;
 }
 
+.metab-field,
+.release-field {
+  grid-column: span 2;
+}
+
+.metab-hint {
+  grid-column: 1 / -1;
+  margin: 4px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.metab-hint small {
+  display: block;
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
 .empty-note {
   margin: 0;
   border: 1px dashed var(--line);

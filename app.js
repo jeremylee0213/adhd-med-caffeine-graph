@@ -1,26 +1,39 @@
-const storageKey = "med-caffeine-graph-v4";
+const storageKey = "med-caffeine-graph-v5";
+const legacyStorageKeys = ["med-caffeine-graph-v4"];
+
+const ces1Phenotypes = {
+  normal: { halfLifeMultiplier: 1, label: "정상 대사 (Normal)" },
+  intermediate: { halfLifeMultiplier: 1.5, label: "중간 대사 (Intermediate, G143E 이형접합)" },
+  poor: { halfLifeMultiplier: 3, label: "느린 대사 (Poor, G143E 동형접합)" },
+};
 
 const defaultItems = [
   {
     id: "concerta",
     name: "콘서타",
     type: "약물",
+    drugClass: "methylphenidate",
     dose: 18,
     unit: "mg",
     time: "06:30",
     repeatDaily: true,
     halfLife: 3.5,
     peakTime: 6.8,
+    releaseProfile: "oros-dual",
+    irFraction: 0.22,
+    irPeakTime: 1.5,
+    erPeakTime: 6.8,
+    metabolizerPhenotype: "normal",
     effectType: "same-day",
     effectStart: 1,
     effectEnd: 12.5,
     steadyState: 0,
     confidence: "높음",
-    evidenceLabel: "DailyMed + OROS 12.5h 연구",
-    evidenceUrl: "https://journals.sagepub.com/doi/10.1177/1087054711425772",
-    evidenceSummary: "Tmax 6-10h, 18mg Tmax 6.8h/t1/2 3.5h. OROS MPH 효과는 1h부터 12.5h까지 관찰.",
+    evidenceLabel: "DailyMed + Modi 2000 OROS PK",
+    evidenceUrl: "https://accp1.onlinelibrary.wiley.com/doi/10.1177/00912700022009431",
+    evidenceSummary: "22% 즉시방출 + 78% ascending release. Tmax 6-10h, t1/2 3.5h. 효과 1-12.5h 관찰. CES1 G143E SNP가 PK에 영향.",
     color: "#1f8f83",
-    note: "methylphenidate ER",
+    note: "methylphenidate OROS (Modi 2000)",
   },
   {
     id: "abilify",
@@ -172,11 +185,24 @@ function bindEvents() {
 
 function loadState() {
   try {
-    const saved = JSON.parse(localStorage.getItem(storageKey));
+    let raw = localStorage.getItem(storageKey);
+    let migrated = false;
+    if (!raw) {
+      for (const legacyKey of legacyStorageKeys) {
+        const legacy = localStorage.getItem(legacyKey);
+        if (legacy) {
+          raw = legacy;
+          migrated = true;
+          break;
+        }
+      }
+    }
+    const saved = JSON.parse(raw);
     if (!saved || !Array.isArray(saved.items)) return;
     state.items = saved.items.map(normalizeItem).filter(Boolean);
     state.durationHours = clamp(Number(saved.durationHours) || 12, 1, 720);
     state.currentTime = typeof saved.currentTime === "string" ? saved.currentTime : "";
+    if (migrated) saveState();
   } catch {
     state.items = structuredClone(defaultItems);
   }
@@ -253,6 +279,16 @@ function updateItem(id, key, value) {
 
   if (key === "repeatDaily") {
     item.repeatDaily = Boolean(value);
+  } else if (key === "irFraction") {
+    item.irFraction = clamp(Number(value), 0, 1);
+  } else if (key === "irPeakTime") {
+    item.irPeakTime = clamp(Number(value), 0.1, 12);
+  } else if (key === "erPeakTime") {
+    item.erPeakTime = clamp(Number(value), 0.5, 24);
+  } else if (key === "releaseProfile") {
+    item.releaseProfile = value === "oros-dual" ? "oros-dual" : "single";
+  } else if (key === "metabolizerPhenotype") {
+    item.metabolizerPhenotype = ces1Phenotypes[value] ? value : "normal";
   } else if (["dose", "halfLife", "peakTime", "effectStart", "effectEnd", "steadyState"].includes(key)) {
     item[key] = clamp(
       Number(value),
@@ -338,14 +374,58 @@ function renderEditor() {
           <input data-key="repeatDaily" aria-label="매일 반복 복용" type="checkbox" ${item.repeatDaily ? "checked" : ""} />
           <em>매일</em>
         </label>
+        ${
+          item.releaseProfile === "oros-dual"
+            ? `
+        <label class="compact-field">
+          <span>⛰️ IR 피크</span>
+          <input data-key="irPeakTime" aria-label="즉시방출 피크 시간" type="number" min="0.1" step="0.1" value="${item.irPeakTime}" />
+        </label>
+        <label class="compact-field">
+          <span>⛰️ ER 피크</span>
+          <input data-key="erPeakTime" aria-label="서방출 피크 시간" type="number" min="0.5" step="0.1" value="${item.erPeakTime}" />
+        </label>
+        <label class="compact-field">
+          <span>📊 IR 비율</span>
+          <input data-key="irFraction" aria-label="IR 비율" type="number" min="0" max="1" step="0.01" value="${item.irFraction}" />
+        </label>`
+            : `
         <label class="compact-field">
           <span>⛰️ 피크</span>
           <input data-key="peakTime" aria-label="피크 시간" type="number" min="0.05" step="0.05" value="${item.peakTime}" />
-        </label>
+        </label>`
+        }
         <label class="compact-field">
           <span>⏳ 반감</span>
           <input data-key="halfLife" aria-label="반감기" type="number" min="0.05" step="0.1" value="${item.halfLife}" />
         </label>
+        ${
+          item.drugClass === "methylphenidate"
+            ? `
+        <label class="compact-field metab-field">
+          <span>🧬 대사</span>
+          <select data-key="metabolizerPhenotype" aria-label="CES1 대사 표현형">
+            ${Object.entries(ces1Phenotypes)
+              .map(
+                ([key, info]) =>
+                  `<option value="${key}" ${item.metabolizerPhenotype === key ? "selected" : ""}>${escapeHtml(info.label)}</option>`,
+              )
+              .join("")}
+          </select>
+        </label>
+        <label class="compact-field release-field">
+          <span>💊 방출</span>
+          <select data-key="releaseProfile" aria-label="방출 프로파일">
+            <option value="single" ${item.releaseProfile === "single" ? "selected" : ""}>단일 (Bateman)</option>
+            <option value="oros-dual" ${item.releaseProfile === "oros-dual" ? "selected" : ""}>OROS 이중 방출</option>
+          </select>
+        </label>
+        <p class="metab-hint">
+          실효 t½: ${formatAmount(effectiveHalfLife(item))}h
+          <small>· CES1 phenotype은 추정치이며 유전자 검사 결과를 대체하지 않습니다.</small>
+        </p>`
+            : ""
+        }
         <label class="compact-field color-field">
           <span>🎨 색</span>
           <input data-key="color" aria-label="색상" type="color" value="${item.color}" />
@@ -653,12 +733,13 @@ function drawSeries(data, x, y) {
 
 function drawPeakMarkers(x, y, startHour) {
   state.items.forEach((item, index) => {
+    const peakTime = effectivePeakTime(item);
     const doseAt = doseAbsoluteHour(item, startHour) - startHour;
-    const lastDay = item.repeatDaily ? Math.ceil((state.durationHours - doseAt - item.peakTime) / 24) : 0;
+    const lastDay = item.repeatDaily ? Math.ceil((state.durationHours - doseAt - peakTime) / 24) : 0;
     let labelled = false;
 
     for (let day = 0; day <= lastDay; day += 1) {
-      const peakAt = doseAt + day * 24 + item.peakTime;
+      const peakAt = doseAt + day * 24 + peakTime;
       if (peakAt < 0 || peakAt > state.durationHours) continue;
       const px = x(peakAt);
       const py = y(100);
@@ -746,9 +827,41 @@ function concentrationRawAt(hour, item) {
 
 function singleDoseContributionAt(hour, item) {
   if (hour < 0) return 0;
-  const ka = solveAbsorptionRate(item.halfLife, item.peakTime);
-  const value = doseContribution(hour, item.halfLife, ka, item.peakTime);
-  return Math.max(0, value);
+  const halfLife = effectiveHalfLife(item);
+  if (item.releaseProfile === "oros-dual") {
+    const irFraction = clamp(Number(item.irFraction ?? 0.22), 0, 1);
+    const erFraction = 1 - irFraction;
+    const irPeak = clamp(Number(item.irPeakTime ?? 1.5), 0.1, 12);
+    const erPeak = clamp(Number(item.erPeakTime ?? item.peakTime ?? 6.8), 0.5, 24);
+    const kaIr = solveAbsorptionRate(halfLife, irPeak);
+    const kaEr = solveAbsorptionRate(halfLife, erPeak);
+    const irPart = doseContribution(hour, halfLife, kaIr, irPeak);
+    const erPart = doseContribution(hour, halfLife, kaEr, erPeak);
+    return Math.max(0, irFraction * irPart + erFraction * erPart);
+  }
+  const ka = solveAbsorptionRate(halfLife, item.peakTime);
+  return Math.max(0, doseContribution(hour, halfLife, ka, item.peakTime));
+}
+
+function effectiveHalfLife(item) {
+  const base = Number(item.halfLife) || 0;
+  if (item.drugClass !== "methylphenidate") return base;
+  const phenotype = ces1Phenotypes[item.metabolizerPhenotype] || ces1Phenotypes.normal;
+  return clamp(base * phenotype.halfLifeMultiplier, 0.05, 240);
+}
+
+function effectivePeakTime(item) {
+  if (item.releaseProfile !== "oros-dual") return item.peakTime;
+  let bestHour = Number(item.erPeakTime) || item.peakTime || 6.8;
+  let bestValue = -Infinity;
+  for (let hour = 0.1; hour <= 24; hour += 0.1) {
+    const value = singleDoseContributionAt(hour, item);
+    if (value > bestValue) {
+      bestValue = value;
+      bestHour = hour;
+    }
+  }
+  return Number(bestHour.toFixed(2));
 }
 
 function repeatLookbackDays(item) {
@@ -893,16 +1006,29 @@ function normalizeItem(item) {
   if (!item || typeof item !== "object") return null;
   const preset = defaultItems.find((candidate) => candidate.id === item.id) || {};
   const effectType = item.effectType === "steady-state" ? "steady-state" : "same-day";
+  const drugClass = item.drugClass || preset.drugClass || "";
+  const releaseProfile = item.releaseProfile === "oros-dual" ? "oros-dual" : preset.releaseProfile === "oros-dual" ? "oros-dual" : "single";
+  const metabolizerPhenotype = ces1Phenotypes[item.metabolizerPhenotype]
+    ? item.metabolizerPhenotype
+    : ces1Phenotypes[preset.metabolizerPhenotype]
+      ? preset.metabolizerPhenotype
+      : "normal";
   return {
     id: String(item.id || crypto.randomUUID()),
     name: String(item.name || "항목"),
     type: item.type === "카페인" ? "카페인" : "약물",
+    drugClass: String(drugClass),
     dose: clamp(Number(item.dose), 0, 1000),
     unit: "mg",
     time: /^\d{2}:\d{2}$/.test(item.time) ? item.time : "08:00",
     repeatDaily: typeof item.repeatDaily === "boolean" ? item.repeatDaily : Boolean(preset.repeatDaily),
     halfLife: clamp(Number(item.halfLife), 0.05, 240),
     peakTime: clamp(Number(item.peakTime), 0.05, 72),
+    releaseProfile,
+    irFraction: clamp(Number(item.irFraction ?? preset.irFraction ?? 0.22), 0, 1),
+    irPeakTime: clamp(Number(item.irPeakTime ?? preset.irPeakTime ?? 1.5), 0.1, 12),
+    erPeakTime: clamp(Number(item.erPeakTime ?? preset.erPeakTime ?? item.peakTime ?? 6.8), 0.5, 24),
+    metabolizerPhenotype,
     effectType,
     effectStart: clamp(Number(item.effectStart ?? preset.effectStart ?? 1), 0, 240),
     effectEnd: clamp(Number(item.effectEnd ?? preset.effectEnd ?? 8), 0, 720),
