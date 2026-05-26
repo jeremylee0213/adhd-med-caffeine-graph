@@ -1,4 +1,4 @@
-const storageKey = "med-caffeine-graph-v3";
+const storageKey = "med-caffeine-graph-v4";
 
 const defaultItems = [
   {
@@ -8,6 +8,7 @@ const defaultItems = [
     dose: 18,
     unit: "mg",
     time: "06:30",
+    repeatDaily: true,
     halfLife: 3.5,
     peakTime: 6.8,
     effectType: "same-day",
@@ -28,6 +29,7 @@ const defaultItems = [
     dose: 2,
     unit: "mg",
     time: "06:30",
+    repeatDaily: true,
     halfLife: 75,
     peakTime: 4,
     effectType: "steady-state",
@@ -48,6 +50,7 @@ const defaultItems = [
     dose: 2,
     unit: "mg",
     time: "06:30",
+    repeatDaily: true,
     halfLife: 30,
     peakTime: 5,
     effectType: "steady-state",
@@ -68,6 +71,7 @@ const defaultItems = [
     dose: 100,
     unit: "mg",
     time: "08:00",
+    repeatDaily: false,
     halfLife: 5,
     peakTime: 0.75,
     effectType: "same-day",
@@ -224,6 +228,7 @@ function addItem(type) {
     dose: isCaffeine ? 100 : 10,
     unit: "mg",
     time: state.currentTime || "08:00",
+    repeatDaily: !isCaffeine,
     halfLife: isCaffeine ? 5 : 4,
     peakTime: isCaffeine ? 0.75 : 2,
     effectType: "same-day",
@@ -246,7 +251,9 @@ function updateItem(id, key, value) {
   const item = state.items.find((target) => target.id === id);
   if (!item) return;
 
-  if (["dose", "halfLife", "peakTime", "effectStart", "effectEnd", "steadyState"].includes(key)) {
+  if (key === "repeatDaily") {
+    item.repeatDaily = Boolean(value);
+  } else if (["dose", "halfLife", "peakTime", "effectStart", "effectEnd", "steadyState"].includes(key)) {
     item[key] = clamp(
       Number(value),
       key === "dose" || key === "steadyState" || key === "effectStart" || key === "effectEnd" ? 0 : 0.05,
@@ -270,10 +277,11 @@ function removeItem(id) {
 function render() {
   const activeCount = state.items.length;
   const acuteCount = state.items.filter((item) => item.effectType === "same-day").length;
+  const repeatCount = state.items.filter((item) => item.repeatDaily).length;
   const chronicCount = state.items.length - acuteCount;
   els.chartTitle.textContent = "약물·카페인 상대 농도·약효";
-  els.modelNote.textContent = "실선=상대 혈중 추정, 얇은 밴드=문헌 기반 약효·각성 구간";
-  els.peakBadge.textContent = `🧭 약효 구간 ${acuteCount}/${activeCount}`;
+  els.modelNote.textContent = "실선=반복 반영 상대 혈중 추정, 얇은 밴드=문헌 기반 약효·각성 구간";
+  els.peakBadge.textContent = `🔁 매일 반복 ${repeatCount}/${activeCount}`;
   els.halfBadge.textContent =
     chronicCount > 0 && state.durationHours < 168
       ? "🔭 장기약은 7일 보기 추천"
@@ -301,7 +309,7 @@ function renderEditor() {
         <span class="item-icon" aria-hidden="true">${icon}</span>
         <span class="edit-title">
           <strong>${escapeHtml(item.name)}</strong>
-          <small>${formatAmount(item.dose)}mg · ${item.time} · ${formatEffectBadge(item)}</small>
+          <small>${formatAmount(item.dose)}mg · ${item.time} · ${item.repeatDaily ? "🔁 매일 · " : ""}${formatEffectBadge(item)}</small>
         </span>
         <span class="edit-pill" aria-hidden="true">✏️</span>
       </summary>
@@ -324,6 +332,11 @@ function renderEditor() {
         <label class="compact-field">
           <span>🕒 시간</span>
           <input data-key="time" aria-label="복용 시각" type="time" value="${item.time}" />
+        </label>
+        <label class="compact-field check-field">
+          <span>🔁 반복</span>
+          <input data-key="repeatDaily" aria-label="매일 반복 복용" type="checkbox" ${item.repeatDaily ? "checked" : ""} />
+          <em>매일</em>
         </label>
         <label class="compact-field">
           <span>⛰️ 피크</span>
@@ -388,7 +401,13 @@ function renderEditor() {
       }
     });
     card.querySelectorAll("[data-key]").forEach((input) => {
-      input.addEventListener("change", () => updateItem(item.id, input.dataset.key, input.value));
+      input.addEventListener("change", () =>
+        updateItem(
+          item.id,
+          input.dataset.key,
+          input.type === "checkbox" ? input.checked : input.value,
+        ),
+      );
     });
     card
       .querySelector(".delete-button")
@@ -433,15 +452,19 @@ function renderSummary() {
 
   state.items.forEach((item, index) => {
     const elapsed = elapsedHourFor(item);
-    const percent = concentrationPercentAt(elapsed, item);
-    const estimatedMg = (item.dose * percent) / 100;
+    const series = data.series.find((entry) => entry.item.id === item.id);
+    const raw = concentrationRawAt(elapsed, item);
+    const percent = concentrationPercentAt(elapsed, item, series?.normalizer || 1);
+    const amountLabel = item.repeatDaily
+      ? `반복지수 ${formatRatio(raw)}x`
+      : `${formatAmount((item.dose * percent) / 100)}mg`;
     const card = document.createElement("div");
     card.className = `summary-row ${index === 0 ? "primary" : ""}`;
     const icon = item.type === "카페인" ? "☕" : "💊";
     card.innerHTML = `
       <span>${icon} ${escapeHtml(item.name)} <b class="confidence-chip">${escapeHtml(item.confidence)}</b></span>
       <strong style="color:${item.color}">${Math.round(percent)}%</strong>
-      <small>${formatAmount(estimatedMg)}mg · ${formatDoseElapsed(elapsed)} · ${escapeHtml(effectStatusFor(item, elapsed))}</small>
+      <small>${item.repeatDaily ? "🔁 매일 반복 · " : ""}${amountLabel} · ${formatDoseElapsed(elapsed)} · ${escapeHtml(effectStatusFor(item, elapsed))}</small>
     `;
     els.summaryList.append(card);
   });
@@ -482,13 +505,18 @@ function buildChartData() {
   const step = state.durationHours <= 24 ? 0.05 : state.durationHours <= 72 ? 0.15 : 0.35;
   const startHour = referenceStartHour();
   const series = state.items.map((item) => {
-    const points = [];
+    const rawPoints = [];
     for (let hour = 0; hour <= state.durationHours + 0.0001; hour += step) {
       const absoluteHour = startHour + hour;
       const elapsed = absoluteHour - doseAbsoluteHour(item, startHour);
-      points.push({ hour, percent: concentrationPercentAt(elapsed, item) });
+      rawPoints.push({ hour, raw: concentrationRawAt(elapsed, item) });
     }
-    return { item, points };
+    const normalizer = Math.max(1, ...rawPoints.map((point) => point.raw));
+    const points = rawPoints.map((point) => ({
+      ...point,
+      percent: clamp((point.raw / normalizer) * 100, 0, 100),
+    }));
+    return { item, points, normalizer };
   });
   return { series, startHour };
 }
@@ -521,7 +549,7 @@ function drawChart(data) {
   drawSeries(data, x, y);
   drawPeakMarkers(x, y, data.startHour);
   drawCurrentMarker(x, pad, plotH, data.startHour);
-  drawHover(x, y, pad, plotW, plotH, data.startHour);
+  drawHover(data, x, y, pad, plotW, plotH, data.startHour);
 }
 
 function drawAxes(width, pad, plotW, plotH, x, y, startHour) {
@@ -569,31 +597,40 @@ function drawEffectWindows(x, pad, plotW, plotH, startHour) {
   const acuteItems = state.items.filter((item) => item.effectType === "same-day").slice(0, 5);
   acuteItems.forEach((item, index) => {
     const doseAt = doseAbsoluteHour(item, startHour) - startHour;
-    const start = clamp(doseAt + item.effectStart, 0, state.durationHours);
-    const end = clamp(doseAt + item.effectEnd, 0, state.durationHours);
-    if (end <= 0 || start >= state.durationHours || end <= start) return;
+    const firstDay = item.repeatDaily ? Math.floor((-doseAt - item.effectEnd) / 24) : 0;
+    const lastDay = item.repeatDaily
+      ? Math.ceil((state.durationHours - doseAt - item.effectStart) / 24)
+      : 0;
+    let labelled = false;
 
-    const yPos = pad.top + plotH - 18 - index * 14;
-    const xStart = x(start);
-    const width = Math.max(8, x(end) - xStart);
+    for (let day = firstDay; day <= lastDay; day += 1) {
+      const start = clamp(doseAt + day * 24 + item.effectStart, 0, state.durationHours);
+      const end = clamp(doseAt + day * 24 + item.effectEnd, 0, state.durationHours);
+      if (end <= 0 || start >= state.durationHours || end <= start) continue;
 
-    ctx.save();
-    ctx.globalAlpha = 0.18;
-    ctx.fillStyle = item.color;
-    ctx.fillRect(xStart, yPos, width, 7);
-    ctx.globalAlpha = 1;
-    ctx.strokeStyle = item.color;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(xStart, yPos, width, 7);
+      const yPos = pad.top + plotH - 18 - index * 14;
+      const xStart = x(start);
+      const width = Math.max(8, x(end) - xStart);
 
-    if (width > 56) {
+      ctx.save();
+      ctx.globalAlpha = 0.18;
       ctx.fillStyle = item.color;
-      ctx.font = "11px Inter, system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "bottom";
-      ctx.fillText(`${item.name} 약효`, xStart + width / 2, yPos - 2);
+      ctx.fillRect(xStart, yPos, width, 7);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = item.color;
+      ctx.lineWidth = 1;
+      ctx.strokeRect(xStart, yPos, width, 7);
+
+      if (!labelled && width > 56) {
+        ctx.fillStyle = item.color;
+        ctx.font = "11px Inter, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(`${item.name} 약효`, xStart + width / 2, yPos - 2);
+        labelled = true;
+      }
+      ctx.restore();
     }
-    ctx.restore();
   });
 }
 
@@ -616,24 +653,31 @@ function drawSeries(data, x, y) {
 
 function drawPeakMarkers(x, y, startHour) {
   state.items.forEach((item, index) => {
-    const peakAt = doseAbsoluteHour(item, startHour) - startHour + item.peakTime;
-    if (peakAt < 0 || peakAt > state.durationHours) return;
-    const px = x(peakAt);
-    const py = y(100);
-    ctx.fillStyle = "#ffffff";
-    ctx.strokeStyle = item.color;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(px, py, 5, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    const doseAt = doseAbsoluteHour(item, startHour) - startHour;
+    const lastDay = item.repeatDaily ? Math.ceil((state.durationHours - doseAt - item.peakTime) / 24) : 0;
+    let labelled = false;
 
-    if (index < 5) {
-      ctx.fillStyle = item.color;
-      ctx.font = "12px Inter, system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "bottom";
-      ctx.fillText(item.name, px, Math.max(12, py - 10 - index * 13));
+    for (let day = 0; day <= lastDay; day += 1) {
+      const peakAt = doseAt + day * 24 + item.peakTime;
+      if (peakAt < 0 || peakAt > state.durationHours) continue;
+      const px = x(peakAt);
+      const py = y(100);
+      ctx.fillStyle = "#ffffff";
+      ctx.strokeStyle = item.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(px, py, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+
+      if (!labelled && index < 5) {
+        ctx.fillStyle = item.color;
+        ctx.font = "12px Inter, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillText(item.name, px, Math.max(12, py - 10 - index * 13));
+        labelled = true;
+      }
     }
   });
 }
@@ -650,7 +694,7 @@ function drawCurrentMarker(x, pad, plotH, startHour) {
   ctx.stroke();
 }
 
-function drawHover(x, y, pad, plotW, plotH, startHour) {
+function drawHover(data, x, y, pad, plotW, plotH, startHour) {
   if (state.hoverX == null) return;
   const rect = els.chartCanvas.getBoundingClientRect();
   const plotX = clamp(state.hoverX, pad.left, pad.left + plotW);
@@ -664,10 +708,10 @@ function drawHover(x, y, pad, plotW, plotH, startHour) {
   ctx.lineTo(plotX, pad.top + plotH);
   ctx.stroke();
 
-  const rows = state.items
-    .map((item) => {
+  const rows = data.series
+    .map(({ item, normalizer }) => {
       const elapsed = absoluteHour - doseAbsoluteHour(item, startHour);
-      const percent = concentrationPercentAt(elapsed, item);
+      const percent = concentrationPercentAt(elapsed, item, normalizer);
       ctx.fillStyle = item.color;
       ctx.beginPath();
       ctx.arc(plotX, y(percent), 4, 0, Math.PI * 2);
@@ -683,11 +727,33 @@ function drawHover(x, y, pad, plotW, plotH, startHour) {
   els.hoverReadout.style.top = `${Math.max(12, y(84) - 12)}px`;
 }
 
-function concentrationPercentAt(hour, item) {
+function concentrationPercentAt(hour, item, normalizer = 1) {
+  return clamp((concentrationRawAt(hour, item) / Math.max(0.0001, normalizer)) * 100, 0, 100);
+}
+
+function concentrationRawAt(hour, item) {
+  if (!item.repeatDaily) {
+    return singleDoseContributionAt(hour, item);
+  }
+  const lookbackDays = repeatLookbackDays(item);
+  const forwardDays = Math.ceil((state.durationHours + 48) / 24);
+  let total = 0;
+  for (let day = -lookbackDays; day <= forwardDays; day += 1) {
+    total += singleDoseContributionAt(hour - day * 24, item);
+  }
+  return total;
+}
+
+function singleDoseContributionAt(hour, item) {
   if (hour < 0) return 0;
   const ka = solveAbsorptionRate(item.halfLife, item.peakTime);
   const value = doseContribution(hour, item.halfLife, ka, item.peakTime);
-  return clamp(value * 100, 0, 100);
+  return Math.max(0, value);
+}
+
+function repeatLookbackDays(item) {
+  const pharmacokineticWindow = Math.max(item.steadyState || 0, item.halfLife * 5, 24);
+  return clamp(Math.ceil(pharmacokineticWindow / 24), 1, 60);
 }
 
 function doseContribution(age, halfLife, ka, peakTime) {
@@ -816,6 +882,13 @@ function formatAmount(value) {
   return number.toFixed(1);
 }
 
+function formatRatio(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "0";
+  if (number >= 10) return number.toFixed(0);
+  return number.toFixed(1);
+}
+
 function normalizeItem(item) {
   if (!item || typeof item !== "object") return null;
   const preset = defaultItems.find((candidate) => candidate.id === item.id) || {};
@@ -827,6 +900,7 @@ function normalizeItem(item) {
     dose: clamp(Number(item.dose), 0, 1000),
     unit: "mg",
     time: /^\d{2}:\d{2}$/.test(item.time) ? item.time : "08:00",
+    repeatDaily: typeof item.repeatDaily === "boolean" ? item.repeatDaily : Boolean(preset.repeatDaily),
     halfLife: clamp(Number(item.halfLife), 0.05, 240),
     peakTime: clamp(Number(item.peakTime), 0.05, 72),
     effectType,

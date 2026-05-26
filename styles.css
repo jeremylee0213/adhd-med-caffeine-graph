@@ -54,6 +54,10 @@ a {
   margin-bottom: 18px;
 }
 
+.topbar > div {
+  min-width: 0;
+}
+
 .app-label {
   margin: 0 0 8px;
   color: var(--teal-dark);
@@ -70,7 +74,7 @@ p {
 
 h1 {
   margin-bottom: 8px;
-  font-size: 56px;
+  font-size: 52px;
   line-height: 1.02;
   letter-spacing: 0;
   overflow-wrap: anywhere;
@@ -470,6 +474,29 @@ input[type="range"] {
 
 .compact-field input[type="color"] {
   padding: 3px;
+}
+
+.check-field {
+  grid-template-columns: 1fr auto;
+  align-items: end;
+}
+
+.check-field span {
+  grid-column: 1 / -1;
+}
+
+.check-field input[type="checkbox"] {
+  width: 28px;
+  min-height: 28px;
+  accent-color: var(--teal);
+}
+
+.check-field em {
+  align-self: center;
+  color: var(--teal-dark);
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 900;
 }
 
 .delete-button {
