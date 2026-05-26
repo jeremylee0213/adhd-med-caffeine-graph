@@ -118,7 +118,7 @@ h3 {
 
 .workspace {
   display: grid;
-  grid-template-columns: 380px minmax(520px, 1fr) 300px;
+  grid-template-columns: minmax(520px, 1fr) 360px;
   gap: 16px;
   align-items: stretch;
 }
@@ -145,6 +145,7 @@ h3 {
 }
 
 .controls {
+  grid-column: 1;
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -441,6 +442,8 @@ input[type="range"] {
 }
 
 .chart-panel {
+  grid-column: 1 / -1;
+  order: 3;
   min-width: 0;
   padding: 18px;
   display: grid;
@@ -467,7 +470,7 @@ input[type="range"] {
 
 .chart-wrap {
   position: relative;
-  min-height: 420px;
+  min-height: 620px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background:
@@ -543,6 +546,8 @@ canvas {
 }
 
 .summary {
+  grid-column: 2;
+  order: 2;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -621,19 +626,19 @@ canvas {
   }
 
   .workspace {
-    grid-template-columns: 360px 1fr;
+    grid-template-columns: minmax(420px, 1fr) 340px;
   }
 
   .summary {
-    grid-column: 1 / -1;
-    display: grid;
-    grid-template-columns: repeat(4, minmax(140px, 1fr));
+    grid-column: 2;
+    display: flex;
+    flex-direction: column;
   }
 
   .summary h2,
   .warning-card,
   .source-card {
-    grid-column: 1 / -1;
+    grid-column: auto;
   }
 }
 
@@ -656,14 +661,17 @@ canvas {
   }
 
   .controls {
+    grid-column: 1;
     order: 1;
   }
 
-  .chart-panel {
+  .summary {
+    grid-column: 1;
     order: 2;
   }
 
-  .summary {
+  .chart-panel {
+    grid-column: 1;
     order: 3;
   }
 
@@ -677,7 +685,7 @@ canvas {
   }
 
   .chart-wrap {
-    min-height: 340px;
+    min-height: 430px;
   }
 
   .grid-two {
