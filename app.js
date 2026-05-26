@@ -1,4 +1,4 @@
-const storageKey = "med-caffeine-graph-v1";
+const storageKey = "med-caffeine-graph-v2";
 
 const defaultItems = [
   {
@@ -54,7 +54,7 @@ const defaultItems = [
 const palette = ["#1f8f83", "#6f63d8", "#d98c23", "#8b5e34", "#2d7dd2", "#b23864"];
 
 const state = {
-  durationHours: 24,
+  durationHours: 12,
   currentTime: "",
   hoverX: null,
   items: structuredClone(defaultItems),
@@ -62,6 +62,7 @@ const state = {
 
 const els = {
   currentTime: document.querySelector("#currentTime"),
+  durationHours: document.querySelector("#durationHours"),
   resetButton: document.querySelector("#resetButton"),
   restoreButton: document.querySelector("#restoreButton"),
   addMedicationButton: document.querySelector("#addMedicationButton"),
@@ -90,6 +91,7 @@ function init() {
     ).padStart(2, "0")}`;
   }
   els.currentTime.value = state.currentTime;
+  els.durationHours.value = state.durationHours;
   bindEvents();
   render();
 }
@@ -101,6 +103,11 @@ function bindEvents() {
     render();
   });
 
+  els.durationHours.addEventListener("input", () => {
+    if (els.durationHours.value === "") return;
+    setDuration(Number(els.durationHours.value));
+  });
+
   els.resetButton.addEventListener("click", restoreDefaults);
   els.restoreButton.addEventListener("click", restoreDefaults);
   els.addMedicationButton.addEventListener("click", () => addItem("약물"));
@@ -108,10 +115,7 @@ function bindEvents() {
 
   els.segments.forEach((button) => {
     button.addEventListener("click", () => {
-      state.durationHours = Number(button.dataset.duration);
-      els.segments.forEach((item) => item.classList.toggle("active", item === button));
-      saveState();
-      render();
+      setDuration(Number(button.dataset.duration));
     });
   });
 
@@ -133,7 +137,7 @@ function loadState() {
     const saved = JSON.parse(localStorage.getItem(storageKey));
     if (!saved || !Array.isArray(saved.items)) return;
     state.items = saved.items.map(normalizeItem).filter(Boolean);
-    state.durationHours = Number(saved.durationHours) || 24;
+    state.durationHours = clamp(Number(saved.durationHours) || 12, 1, 720);
     state.currentTime = typeof saved.currentTime === "string" ? saved.currentTime : "";
   } catch {
     state.items = structuredClone(defaultItems);
@@ -153,10 +157,25 @@ function saveState() {
 
 function restoreDefaults() {
   state.items = structuredClone(defaultItems);
-  state.durationHours = 24;
-  els.segments.forEach((item) => item.classList.toggle("active", item.dataset.duration === "24"));
+  state.durationHours = 12;
+  els.durationHours.value = state.durationHours;
+  syncDurationButtons();
   saveState();
   render();
+}
+
+function setDuration(value) {
+  state.durationHours = clamp(value, 1, 720);
+  els.durationHours.value = state.durationHours;
+  syncDurationButtons();
+  saveState();
+  render();
+}
+
+function syncDurationButtons() {
+  els.segments.forEach((item) => {
+    item.classList.toggle("active", Number(item.dataset.duration) === state.durationHours);
+  });
 }
 
 function addItem(type) {
@@ -202,7 +221,9 @@ function render() {
   els.chartTitle.textContent = "약물·카페인 상대 농도";
   els.modelNote.textContent = "각 항목의 자기 최고치 대비 %, 실제 효과 지속시간 아님";
   els.peakBadge.textContent = `${activeCount}개 항목 계산`;
-  els.halfBadge.textContent = state.durationHours === 24 ? "24시간 보기" : `${state.durationHours}시간 보기`;
+  els.halfBadge.textContent = `${formatDurationLabel(state.durationHours)} 보기`;
+  els.durationHours.value = state.durationHours;
+  syncDurationButtons();
   renderEditor();
   renderLegend();
   renderChartOnly();
@@ -601,6 +622,11 @@ function formatElapsed(hours) {
   if (h) parts.push(`${h}시간`);
   if (m && day === 0) parts.push(`${m}분`);
   return parts.length ? parts.join(" ") : "0분";
+}
+
+function formatDurationLabel(hours) {
+  if (hours >= 24 && Number.isInteger(hours / 24)) return `${hours / 24}일`;
+  return `${Number(hours).toLocaleString("ko-KR", { maximumFractionDigits: 1 })}시간`;
 }
 
 function formatDoseElapsed(hours) {

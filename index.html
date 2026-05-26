@@ -37,11 +37,18 @@
           </label>
 
           <label class="field">
-            <span>보기 범위</span>
-            <div class="segmented three" role="group" aria-label="보기 범위">
-              <button class="segment active" data-duration="24" type="button">24h</button>
-              <button class="segment" data-duration="72" type="button">72h</button>
-              <button class="segment" data-duration="168" type="button">7일</button>
+            <span>그래프 시간</span>
+            <div class="duration-control">
+              <div class="segmented four" role="group" aria-label="빠른 그래프 시간 선택">
+                <button class="segment active" data-duration="12" type="button">12h</button>
+                <button class="segment" data-duration="24" type="button">24h</button>
+                <button class="segment" data-duration="72" type="button">72h</button>
+                <button class="segment" data-duration="168" type="button">7일</button>
+              </div>
+              <div class="input-unit">
+                <input id="durationHours" type="number" min="1" max="720" step="0.5" value="12" />
+                <b>h</b>
+              </div>
             </div>
           </label>
 

@@ -240,6 +240,15 @@ input[type="range"] {
   grid-template-columns: 1fr 1fr 1fr;
 }
 
+.segmented.four {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.duration-control {
+  display: grid;
+  gap: 10px;
+}
+
 .segment {
   border: 0;
   border-right: 1px solid var(--line);
