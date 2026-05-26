@@ -10,14 +10,14 @@
     <main class="app-shell">
       <header class="topbar">
         <div>
-          <p class="app-label">교육용 추정 도구</p>
-          <h1>약물·카페인 농도 그래프</h1>
+          <p class="app-label">🧪 교육용 추정 도구</p>
+          <h1>💊 약물·카페인 농도 그래프</h1>
           <p class="subtle">
             약물과 카페인 용량, 복용 시각, 피크 시간, 반감기를 직접 수정해 상대 농도 변화를 봅니다.
           </p>
         </div>
         <section class="safety-strip" aria-label="안전 안내">
-          <strong>의료 결정 금지</strong>
+          <strong>⚠️ 의료 결정 금지</strong>
           <span>복용량이나 복용 시간을 이 앱으로 바꾸지 마세요. 처방 의료진과 상의하세요.</span>
         </section>
       </header>
@@ -25,19 +25,19 @@
       <section class="workspace">
         <aside class="panel controls" aria-label="계산 입력">
           <div class="panel-head">
-            <h2>복용 조건</h2>
+            <h2>✍️ 입력</h2>
             <button class="icon-button" id="resetButton" type="button" title="기본값으로 되돌리기" aria-label="기본값으로 되돌리기">
               ↺
             </button>
           </div>
 
           <label class="field">
-            <span>현재 시각</span>
+            <span>🕒 현재 시각</span>
             <input id="currentTime" type="time" />
           </label>
 
           <label class="field">
-            <span>그래프 시간</span>
+            <span>⏱️ 그래프 시간</span>
             <div class="duration-control">
               <div class="segmented four" role="group" aria-label="빠른 그래프 시간 선택">
                 <button class="segment active" data-duration="12" type="button">12h</button>
@@ -53,14 +53,14 @@
           </label>
 
           <div class="quick-actions">
-            <button class="primary-action" id="addMedicationButton" type="button">+ 약물 추가</button>
-            <button class="secondary-action" id="addCaffeineButton" type="button">+ 카페인 추가</button>
+            <button class="primary-action" id="addMedicationButton" type="button">+ 💊 약물</button>
+            <button class="secondary-action" id="addCaffeineButton" type="button">+ ☕ 카페인</button>
           </div>
 
           <div class="dose-list medication-list" aria-live="polite">
             <div class="list-title">
-              <span>농도 항목 직접 수정</span>
-              <button id="restoreButton" type="button">기본값 복원</button>
+              <span>🧾 투여 카드</span>
+              <button id="restoreButton" type="button">↺ 기본값</button>
             </div>
             <div id="itemEditor" class="item-editor"></div>
           </div>
@@ -69,7 +69,7 @@
         <section class="chart-panel" aria-label="농도 그래프">
           <div class="chart-head">
             <div>
-              <h2 id="chartTitle">상대 농도 변화</h2>
+              <h2 id="chartTitle">📈 상대 농도 변화</h2>
               <p id="modelNote">각 항목의 자기 최고치 대비 %, 1차 소실 단순 모델</p>
             </div>
             <div class="chart-badges">
@@ -91,11 +91,11 @@
         </section>
 
         <aside class="panel summary" aria-label="결과 요약">
-          <h2>요약</h2>
+          <h2>📌 요약</h2>
           <div id="summaryList" class="summary-list"></div>
 
           <details class="warning-card compact-disclosure">
-            <summary>주의</summary>
+            <summary>⚠️ 주의</summary>
             <p>이 그래프는 교육용 추정치입니다. 실제 혈중 농도, 효과, 부작용을 보장하지 않습니다.</p>
             <p>에스시탐을 에스시탈로프람으로 가정했습니다. 다른 약이면 기준값을 바꿔야 합니다.</p>
             <p>카페인은 개인차, 흡연, 간 기능, 임신, 다른 약물에 따라 반감기가 크게 달라질 수 있습니다.</p>
@@ -103,7 +103,7 @@
           </details>
 
           <details class="source-card compact-disclosure">
-            <summary>기준값 출처</summary>
+            <summary>📚 기준값 출처</summary>
             <p id="sourceText">프리셋은 공개 의약품 라벨의 약동학 수치를 참고했습니다.</p>
             <ul>
               <li><a href="https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=1a88218c-5b18-4220-8f56-526de1a276cd" target="_blank" rel="noreferrer">DailyMed Concerta</a></li>
