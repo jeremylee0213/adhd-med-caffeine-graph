@@ -336,19 +336,41 @@ input[type="range"] {
 .item-editor,
 #doseList {
   display: grid;
-  gap: 8px;
+  gap: 5px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.edit-card {
+.edit-table-head,
+.edit-row {
   display: grid;
-  gap: 10px;
+  grid-template-columns:
+    minmax(110px, 1.15fr)
+    88px
+    74px
+    106px
+    70px
+    78px
+    46px
+    minmax(120px, 1fr)
+    30px;
+  gap: 6px;
+  align-items: center;
+}
+
+.edit-table-head {
+  padding: 0 8px 2px 13px;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.edit-card {
   border: 1px solid var(--line);
   border-left: 5px solid var(--med-color);
   border-radius: 7px;
-  padding: 10px;
+  padding: 6px 8px;
   background: #fbfcfc;
 }
 
@@ -367,11 +389,15 @@ input[type="range"] {
 
 .compact-field {
   display: grid;
-  gap: 5px;
   min-width: 0;
 }
 
 .compact-field span {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
   color: var(--muted);
   font-size: 11px;
   font-weight: 800;
@@ -379,18 +405,18 @@ input[type="range"] {
 
 .compact-field input,
 .compact-field select {
-  min-height: 36px;
-  padding: 0 9px;
-  font-size: 13px;
+  min-height: 30px;
+  padding: 0 7px;
+  font-size: 12px;
 }
 
 .compact-field input[type="color"] {
-  padding: 4px;
+  padding: 3px;
 }
 
 .delete-button {
   width: 30px;
-  height: 36px;
+  height: 30px;
   border-radius: 6px;
   background: var(--danger-soft);
   color: #a43d22;
@@ -562,12 +588,42 @@ canvas {
 
 .summary-list {
   display: grid;
-  gap: 12px;
+  gap: 5px;
 }
 
-.metric.primary {
+.summary-row {
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) auto;
+  column-gap: 8px;
+  row-gap: 2px;
+  align-items: baseline;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 7px 9px;
+  background: #fbfcfc;
+}
+
+.summary-row.primary {
   border-color: rgba(31, 143, 131, 0.28);
   background: #eef8f5;
+}
+
+.summary-row span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.summary-row strong {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.summary-row small {
+  grid-column: 1 / -1;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .metric strong {
@@ -585,7 +641,7 @@ canvas {
 .warning-card,
 .source-card {
   border-radius: 7px;
-  padding: 14px;
+  padding: 9px 11px;
 }
 
 .warning-card {
@@ -596,6 +652,16 @@ canvas {
 .source-card {
   border: 1px solid var(--line);
   background: var(--surface-2);
+}
+
+.compact-disclosure summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.compact-disclosure[open] summary {
+  margin-bottom: 8px;
 }
 
 .warning-card p,
@@ -686,6 +752,37 @@ canvas {
 
   .chart-wrap {
     min-height: 430px;
+  }
+
+  .edit-table-head {
+    display: none;
+  }
+
+  .edit-row {
+    position: relative;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+    padding: 8px 42px 8px 9px;
+  }
+
+  .edit-row .compact-field:first-child,
+  .edit-row .compact-field:last-of-type {
+    grid-column: 1 / -1;
+  }
+
+  .edit-row .compact-field span {
+    position: static;
+    width: auto;
+    height: auto;
+    margin-bottom: 4px;
+    overflow: visible;
+    clip: auto;
+  }
+
+  .edit-row .delete-button {
+    position: absolute;
+    top: 8px;
+    right: 8px;
   }
 
   .grid-two {

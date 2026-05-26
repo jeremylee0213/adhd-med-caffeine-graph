@@ -233,51 +233,64 @@ function render() {
 function renderEditor() {
   els.itemEditor.replaceChildren();
 
+  if (state.items.length > 0) {
+    const header = document.createElement("div");
+    header.className = "edit-table-head";
+    header.innerHTML = `
+      <span>이름</span>
+      <span>구분</span>
+      <span>용량</span>
+      <span>시간</span>
+      <span>피크</span>
+      <span>반감기</span>
+      <span>색</span>
+      <span>메모</span>
+      <span></span>
+    `;
+    els.itemEditor.append(header);
+  }
+
   state.items.forEach((item) => {
     const card = document.createElement("section");
-    card.className = "edit-card";
+    card.className = "edit-card edit-row";
     card.style.setProperty("--med-color", item.color);
     card.innerHTML = `
-      <div class="edit-card-head">
-        <label class="compact-field name-field">
-          <span>이름</span>
-          <input data-key="name" value="${escapeHtml(item.name)}" />
-        </label>
-        <button class="delete-button" type="button" title="삭제" aria-label="${escapeHtml(item.name)} 삭제">×</button>
-      </div>
-      <div class="edit-grid">
-        <label class="compact-field">
-          <span>구분</span>
-          <select data-key="type">
-            <option value="약물" ${item.type === "약물" ? "selected" : ""}>약물</option>
-            <option value="카페인" ${item.type === "카페인" ? "selected" : ""}>카페인</option>
-          </select>
-        </label>
-        <label class="compact-field">
-          <span>용량 mg</span>
-          <input data-key="dose" type="number" min="0" step="0.5" value="${item.dose}" />
-        </label>
-        <label class="compact-field">
-          <span>복용 시각</span>
-          <input data-key="time" type="time" value="${item.time}" />
-        </label>
-        <label class="compact-field">
-          <span>피크 h</span>
-          <input data-key="peakTime" type="number" min="0.05" step="0.05" value="${item.peakTime}" />
-        </label>
-        <label class="compact-field">
-          <span>반감기 h</span>
-          <input data-key="halfLife" type="number" min="0.05" step="0.1" value="${item.halfLife}" />
-        </label>
-        <label class="compact-field">
-          <span>색상</span>
-          <input data-key="color" type="color" value="${item.color}" />
-        </label>
-      </div>
+      <label class="compact-field">
+        <span>이름</span>
+        <input data-key="name" aria-label="이름" value="${escapeHtml(item.name)}" />
+      </label>
+      <label class="compact-field">
+        <span>구분</span>
+        <select data-key="type" aria-label="구분">
+          <option value="약물" ${item.type === "약물" ? "selected" : ""}>약물</option>
+          <option value="카페인" ${item.type === "카페인" ? "selected" : ""}>카페인</option>
+        </select>
+      </label>
+      <label class="compact-field">
+        <span>용량 mg</span>
+        <input data-key="dose" aria-label="용량 mg" type="number" min="0" step="0.5" value="${item.dose}" />
+      </label>
+      <label class="compact-field">
+        <span>복용 시각</span>
+        <input data-key="time" aria-label="복용 시각" type="time" value="${item.time}" />
+      </label>
+      <label class="compact-field">
+        <span>피크 h</span>
+        <input data-key="peakTime" aria-label="피크 시간" type="number" min="0.05" step="0.05" value="${item.peakTime}" />
+      </label>
+      <label class="compact-field">
+        <span>반감기 h</span>
+        <input data-key="halfLife" aria-label="반감기" type="number" min="0.05" step="0.1" value="${item.halfLife}" />
+      </label>
+      <label class="compact-field color-field">
+        <span>색상</span>
+        <input data-key="color" aria-label="색상" type="color" value="${item.color}" />
+      </label>
       <label class="compact-field">
         <span>메모</span>
-        <input data-key="note" value="${escapeHtml(item.note)}" />
+        <input data-key="note" aria-label="메모" value="${escapeHtml(item.note)}" />
       </label>
+      <button class="delete-button" type="button" title="삭제" aria-label="${escapeHtml(item.name)} 삭제">×</button>
     `;
 
     card.querySelectorAll("[data-key]").forEach((input) => {
@@ -318,7 +331,7 @@ function renderSummary() {
 
   if (state.items.length === 0) {
     const empty = document.createElement("div");
-    empty.className = "metric";
+    empty.className = "summary-row";
     empty.innerHTML = "<span>요약</span><strong>-</strong><small>계산할 항목이 없습니다.</small>";
     els.summaryList.append(empty);
     return;
@@ -330,21 +343,21 @@ function renderSummary() {
     const estimatedMg = (item.dose * percent) / 100;
     const belowHalfAt = item.peakTime + item.halfLife;
     const card = document.createElement("div");
-    card.className = `metric ${index === 0 ? "primary" : ""}`;
+    card.className = `summary-row ${index === 0 ? "primary" : ""}`;
     card.innerHTML = `
-      <span>${escapeHtml(item.name)} ${formatAmount(item.dose)}mg</span>
+      <span>${escapeHtml(item.name)}</span>
       <strong style="color:${item.color}">${Math.round(percent)}%</strong>
-      <small>${formatAmount(estimatedMg)}mg 환산 · ${formatDoseElapsed(elapsed)} · 50% 아래 ${formatElapsed(belowHalfAt)} 전후</small>
+      <small>${formatAmount(estimatedMg)}mg · ${formatDoseElapsed(elapsed)} · 50%↓ ${formatElapsed(belowHalfAt)}</small>
     `;
     els.summaryList.append(card);
   });
 
   const reference = document.createElement("div");
-  reference.className = "metric";
+  reference.className = "summary-row";
   reference.innerHTML = `
     <span>현재 시각</span>
     <strong>${state.currentTime || "--:--"}</strong>
-    <small>mg 환산은 실제 혈중농도 단위가 아니라 복용량 대비 단순 추정입니다.</small>
+    <small>mg는 복용량 대비 단순 환산</small>
   `;
   els.summaryList.append(reference);
 
