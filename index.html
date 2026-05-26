@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>약물·카페인 농도 그래프</title>
+    <title>약물·카페인 농도·약효 그래프</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -11,7 +11,7 @@
       <header class="topbar">
         <div>
           <p class="app-label">🧪 교육용 추정 도구</p>
-          <h1>💊 약물·카페인 농도 그래프</h1>
+          <h1>💊 약물·카페인 농도·약효 그래프</h1>
           <p class="subtle">
             약물과 카페인 용량, 복용 시각, 피크 시간, 반감기를 직접 수정해 상대 농도 변화를 봅니다.
           </p>
@@ -56,6 +56,7 @@
             <button class="primary-action" id="addMedicationButton" type="button">+ 💊 약물</button>
             <button class="secondary-action" id="addCaffeineButton" type="button">+ ☕ 카페인</button>
           </div>
+          <p class="micro-warning">⚕️ 복용 변경용이 아니라, 처방·카페인 기록을 해석하기 위한 참고 화면입니다.</p>
 
           <div class="dose-list medication-list" aria-live="polite">
             <div class="list-title">
@@ -87,6 +88,7 @@
             <div id="legendItems" class="legend-items"></div>
             <span><i class="line-current"></i>현재 시각</span>
             <span><i class="line-half"></i>50% 기준</span>
+            <span><i class="line-effect"></i>약효·각성 구간</span>
           </div>
         </section>
 
@@ -103,14 +105,16 @@
           </details>
 
           <details class="source-card compact-disclosure">
-            <summary>📚 기준값 출처</summary>
-            <p id="sourceText">프리셋은 공개 의약품 라벨의 약동학 수치를 참고했습니다.</p>
+            <summary>📚 근거와 신뢰도</summary>
+            <p id="sourceText">혈중 농도와 약효 지속시간은 다릅니다. 콘서타·카페인은 당일 구간, 아빌리파이·에스시탐은 누적형으로 분리했습니다.</p>
+            <div id="evidenceList" class="evidence-list"></div>
             <ul>
               <li><a href="https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=1a88218c-5b18-4220-8f56-526de1a276cd" target="_blank" rel="noreferrer">DailyMed Concerta</a></li>
-              <li><a href="https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=231e2433-31fe-4612-80f0-ba00dee3b26a" target="_blank" rel="noreferrer">DailyMed Abilify</a></li>
+              <li><a href="https://journals.sagepub.com/doi/10.1177/1087054711425772" target="_blank" rel="noreferrer">OROS methylphenidate 12.5h study</a></li>
+              <li><a href="https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=6875b848-8b13-45f8-ada5-69ef8aece6b6" target="_blank" rel="noreferrer">DailyMed Abilify</a></li>
               <li><a href="https://www.dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=5088d6cd-ec13-384d-e063-6394a90aee05" target="_blank" rel="noreferrer">DailyMed Escitalopram</a></li>
+              <li><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC315490/" target="_blank" rel="noreferrer">Escitalopram clinical onset review</a></li>
               <li><a href="https://www.ncbi.nlm.nih.gov/sites/books/NBK519490/" target="_blank" rel="noreferrer">NCBI Caffeine</a></li>
-              <li><a href="https://www.fda.gov/drugs/drug-safety-and-availability/fda-updating-warnings-improve-safe-use-prescription-stimulants-used-treat-adhd-and-other-conditions" target="_blank" rel="noreferrer">FDA stimulant safety warning</a></li>
             </ul>
           </details>
         </aside>

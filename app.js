@@ -1,4 +1,4 @@
-const storageKey = "med-caffeine-graph-v2";
+const storageKey = "med-caffeine-graph-v3";
 
 const defaultItems = [
   {
@@ -10,6 +10,14 @@ const defaultItems = [
     time: "06:30",
     halfLife: 3.5,
     peakTime: 6.8,
+    effectType: "same-day",
+    effectStart: 1,
+    effectEnd: 12.5,
+    steadyState: 0,
+    confidence: "높음",
+    evidenceLabel: "DailyMed + OROS 12.5h 연구",
+    evidenceUrl: "https://journals.sagepub.com/doi/10.1177/1087054711425772",
+    evidenceSummary: "Tmax 6-10h, 18mg Tmax 6.8h/t1/2 3.5h. OROS MPH 효과는 1h부터 12.5h까지 관찰.",
     color: "#1f8f83",
     note: "methylphenidate ER",
   },
@@ -22,6 +30,14 @@ const defaultItems = [
     time: "06:30",
     halfLife: 75,
     peakTime: 4,
+    effectType: "steady-state",
+    effectStart: 0,
+    effectEnd: 0,
+    steadyState: 336,
+    confidence: "높음",
+    evidenceLabel: "DailyMed Abilify",
+    evidenceUrl: "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=6875b848-8b13-45f8-ada5-69ef8aece6b6",
+    evidenceSummary: "Tmax 3-5h, t1/2 75h. 활성대사체 94h, 정상상태는 약 14일.",
     color: "#6f63d8",
     note: "aripiprazole",
   },
@@ -34,6 +50,14 @@ const defaultItems = [
     time: "06:30",
     halfLife: 30,
     peakTime: 5,
+    effectType: "steady-state",
+    effectStart: 0,
+    effectEnd: 0,
+    steadyState: 168,
+    confidence: "중간",
+    evidenceLabel: "DailyMed + SSRI 리뷰",
+    evidenceUrl: "https://www.dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=5088d6cd-ec13-384d-e063-6394a90aee05",
+    evidenceSummary: "Tmax 약 5h, t1/2 27-32h, 정상상태 약 1주. 임상 효과 평가는 보통 주 단위.",
     color: "#d98c23",
     note: "escitalopram 가정",
   },
@@ -46,6 +70,14 @@ const defaultItems = [
     time: "08:00",
     halfLife: 5,
     peakTime: 0.75,
+    effectType: "same-day",
+    effectStart: 0.25,
+    effectEnd: 6,
+    steadyState: 0,
+    confidence: "중간",
+    evidenceLabel: "NCBI StatPearls + caffeine review",
+    evidenceUrl: "https://www.ncbi.nlm.nih.gov/books/NBK519490/",
+    evidenceSummary: "성인 평균 t1/2 약 5h. 피크/체감은 개인차가 커서 흡연, 임신, 간기능, CYP1A2 영향.",
     color: "#8b5e34",
     note: "커피 1잔 수준 예시",
   },
@@ -75,6 +107,7 @@ const els = {
   peakBadge: document.querySelector("#peakBadge"),
   halfBadge: document.querySelector("#halfBadge"),
   summaryList: document.querySelector("#summaryList"),
+  evidenceList: document.querySelector("#evidenceList"),
   legendItems: document.querySelector("#legendItems"),
   hoverReadout: document.querySelector("#hoverReadout"),
   segments: [...document.querySelectorAll(".segment")],
@@ -193,6 +226,14 @@ function addItem(type) {
     time: state.currentTime || "08:00",
     halfLife: isCaffeine ? 5 : 4,
     peakTime: isCaffeine ? 0.75 : 2,
+    effectType: "same-day",
+    effectStart: isCaffeine ? 0.25 : 1,
+    effectEnd: isCaffeine ? 6 : 8,
+    steadyState: 0,
+    confidence: "직접입력",
+    evidenceLabel: "사용자 입력",
+    evidenceUrl: "",
+    evidenceSummary: "사용자가 직접 입력한 지속시간입니다.",
     color: palette[nextIndex % palette.length],
     note: isCaffeine ? "카페인 직접 입력" : "직접 입력",
   });
@@ -205,8 +246,12 @@ function updateItem(id, key, value) {
   const item = state.items.find((target) => target.id === id);
   if (!item) return;
 
-  if (["dose", "halfLife", "peakTime"].includes(key)) {
-    item[key] = clamp(Number(value), key === "dose" ? 0 : 0.05, key === "halfLife" ? 240 : 1000);
+  if (["dose", "halfLife", "peakTime", "effectStart", "effectEnd", "steadyState"].includes(key)) {
+    item[key] = clamp(
+      Number(value),
+      key === "dose" || key === "steadyState" || key === "effectStart" || key === "effectEnd" ? 0 : 0.05,
+      key === "halfLife" ? 240 : 1000,
+    );
   } else {
     item[key] = value;
   }
@@ -224,16 +269,22 @@ function removeItem(id) {
 
 function render() {
   const activeCount = state.items.length;
-  els.chartTitle.textContent = "약물·카페인 상대 농도";
-  els.modelNote.textContent = "각 항목의 자기 최고치 대비 %, 실제 효과 지속시간 아님";
-  els.peakBadge.textContent = `🧮 ${activeCount}개 계산`;
-  els.halfBadge.textContent = `⏱️ ${formatDurationLabel(state.durationHours)}`;
+  const acuteCount = state.items.filter((item) => item.effectType === "same-day").length;
+  const chronicCount = state.items.length - acuteCount;
+  els.chartTitle.textContent = "약물·카페인 상대 농도·약효";
+  els.modelNote.textContent = "실선=상대 혈중 추정, 얇은 밴드=문헌 기반 약효·각성 구간";
+  els.peakBadge.textContent = `🧭 약효 구간 ${acuteCount}/${activeCount}`;
+  els.halfBadge.textContent =
+    chronicCount > 0 && state.durationHours < 168
+      ? "🔭 장기약은 7일 보기 추천"
+      : `⏱️ ${formatDurationLabel(state.durationHours)}`;
   els.durationHours.value = state.durationHours;
   syncDurationButtons();
   renderEditor();
   renderLegend();
   renderChartOnly();
   renderSummary();
+  renderEvidence();
 }
 
 function renderEditor() {
@@ -250,7 +301,7 @@ function renderEditor() {
         <span class="item-icon" aria-hidden="true">${icon}</span>
         <span class="edit-title">
           <strong>${escapeHtml(item.name)}</strong>
-          <small>${formatAmount(item.dose)}mg · ${item.time} · ⛰️${item.peakTime}h · ⏳${item.halfLife}h</small>
+          <small>${formatAmount(item.dose)}mg · ${item.time} · ${formatEffectBadge(item)}</small>
         </span>
         <span class="edit-pill" aria-hidden="true">✏️</span>
       </summary>
@@ -286,9 +337,41 @@ function renderEditor() {
           <span>🎨 색</span>
           <input data-key="color" aria-label="색상" type="color" value="${item.color}" />
         </label>
+        <label class="compact-field">
+          <span>🧭 방식</span>
+          <select data-key="effectType" aria-label="약효 표시 방식">
+            <option value="same-day" ${item.effectType === "same-day" ? "selected" : ""}>🧭 당일</option>
+            <option value="steady-state" ${item.effectType === "steady-state" ? "selected" : ""}>🧬 누적</option>
+          </select>
+        </label>
+        ${
+          item.effectType === "steady-state"
+            ? `
+        <label class="compact-field">
+          <span>🧬 정상상태 h</span>
+          <input data-key="steadyState" aria-label="정상상태 도달 시간" type="number" min="0" step="1" value="${item.steadyState}" />
+        </label>`
+            : `
+        <label class="compact-field">
+          <span>🚦 효과 시작</span>
+          <input data-key="effectStart" aria-label="효과 시작 시간" type="number" min="0" step="0.25" value="${item.effectStart}" />
+        </label>
+        <label class="compact-field">
+          <span>🏁 효과 끝</span>
+          <input data-key="effectEnd" aria-label="효과 종료 시간" type="number" min="0" step="0.25" value="${item.effectEnd}" />
+        </label>`
+        }
         <label class="compact-field note-field">
           <span>📝 메모</span>
           <input data-key="note" aria-label="메모" value="${escapeHtml(item.note)}" />
+        </label>
+        <label class="compact-field evidence-field">
+          <span>📚 근거</span>
+          <input data-key="evidenceSummary" aria-label="근거 요약" value="${escapeHtml(item.evidenceSummary)}" />
+        </label>
+        <label class="compact-field evidence-field">
+          <span>🔗 출처 URL</span>
+          <input data-key="evidenceUrl" aria-label="출처 URL" value="${escapeHtml(item.evidenceUrl)}" />
         </label>
         <button class="delete-button" type="button" title="삭제" aria-label="${escapeHtml(item.name)} 삭제">🗑️ 삭제</button>
       </div>
@@ -352,14 +435,13 @@ function renderSummary() {
     const elapsed = elapsedHourFor(item);
     const percent = concentrationPercentAt(elapsed, item);
     const estimatedMg = (item.dose * percent) / 100;
-    const belowHalfAt = item.peakTime + item.halfLife;
     const card = document.createElement("div");
     card.className = `summary-row ${index === 0 ? "primary" : ""}`;
     const icon = item.type === "카페인" ? "☕" : "💊";
     card.innerHTML = `
-      <span>${icon} ${escapeHtml(item.name)}</span>
+      <span>${icon} ${escapeHtml(item.name)} <b class="confidence-chip">${escapeHtml(item.confidence)}</b></span>
       <strong style="color:${item.color}">${Math.round(percent)}%</strong>
-      <small>${formatAmount(estimatedMg)}mg · ${formatDoseElapsed(elapsed)} · 50%↓ ${formatElapsed(belowHalfAt)}</small>
+      <small>${formatAmount(estimatedMg)}mg · ${formatDoseElapsed(elapsed)} · ${escapeHtml(effectStatusFor(item, elapsed))}</small>
     `;
     els.summaryList.append(card);
   });
@@ -374,6 +456,26 @@ function renderSummary() {
   els.summaryList.append(reference);
 
   void data;
+}
+
+function renderEvidence() {
+  if (!els.evidenceList) return;
+  els.evidenceList.replaceChildren();
+
+  state.items.forEach((item) => {
+    const row = document.createElement("div");
+    row.className = "evidence-row";
+    const icon = item.type === "카페인" ? "☕" : "💊";
+    const source = item.evidenceUrl
+      ? `<a href="${escapeHtml(item.evidenceUrl)}" target="_blank" rel="noreferrer">${escapeHtml(item.evidenceLabel || "출처")}</a>`
+      : `<span>${escapeHtml(item.evidenceLabel || "사용자 입력")}</span>`;
+    row.innerHTML = `
+      <strong>${icon} ${escapeHtml(item.name)} <b class="confidence-chip">${escapeHtml(item.confidence)}</b></strong>
+      <small>${escapeHtml(item.evidenceSummary)}</small>
+      ${source}
+    `;
+    els.evidenceList.append(row);
+  });
 }
 
 function buildChartData() {
@@ -415,6 +517,7 @@ function drawChart(data) {
   ctx.clearRect(0, 0, width, height);
   drawAxes(width, pad, plotW, plotH, x, y, data.startHour);
   drawHalfLine(pad, plotW, y);
+  drawEffectWindows(x, pad, plotW, plotH, data.startHour);
   drawSeries(data, x, y);
   drawPeakMarkers(x, y, data.startHour);
   drawCurrentMarker(x, pad, plotH, data.startHour);
@@ -460,6 +563,38 @@ function drawHalfLine(pad, plotW, y) {
   ctx.lineTo(pad.left + plotW, y(50));
   ctx.stroke();
   ctx.restore();
+}
+
+function drawEffectWindows(x, pad, plotW, plotH, startHour) {
+  const acuteItems = state.items.filter((item) => item.effectType === "same-day").slice(0, 5);
+  acuteItems.forEach((item, index) => {
+    const doseAt = doseAbsoluteHour(item, startHour) - startHour;
+    const start = clamp(doseAt + item.effectStart, 0, state.durationHours);
+    const end = clamp(doseAt + item.effectEnd, 0, state.durationHours);
+    if (end <= 0 || start >= state.durationHours || end <= start) return;
+
+    const yPos = pad.top + plotH - 18 - index * 14;
+    const xStart = x(start);
+    const width = Math.max(8, x(end) - xStart);
+
+    ctx.save();
+    ctx.globalAlpha = 0.18;
+    ctx.fillStyle = item.color;
+    ctx.fillRect(xStart, yPos, width, 7);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = item.color;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(xStart, yPos, width, 7);
+
+    if (width > 56) {
+      ctx.fillStyle = item.color;
+      ctx.font = "11px Inter, system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "bottom";
+      ctx.fillText(`${item.name} 약효`, xStart + width / 2, yPos - 2);
+    }
+    ctx.restore();
+  });
 }
 
 function drawSeries(data, x, y) {
@@ -658,6 +793,22 @@ function formatDoseElapsed(hours) {
   return hours < 0 ? "복용 전" : `복용 후 ${formatElapsed(hours)}`;
 }
 
+function formatEffectBadge(item) {
+  if (item.effectType === "steady-state") {
+    return `🧬 정상상태 ${formatElapsed(item.steadyState)}`;
+  }
+  return `🧭 약효 ${formatElapsed(item.effectStart)}-${formatElapsed(item.effectEnd)}`;
+}
+
+function effectStatusFor(item, elapsed) {
+  if (item.effectType === "steady-state") {
+    return `누적형: 정상상태 약 ${formatElapsed(item.steadyState)}`;
+  }
+  if (elapsed < item.effectStart) return `효과 시작 전: 약 ${formatElapsed(item.effectStart - elapsed)} 남음`;
+  if (elapsed <= item.effectEnd) return `문헌 기반 약효 구간: ${formatElapsed(item.effectEnd - elapsed)} 남음`;
+  return `약효 구간 이후: ${formatElapsed(elapsed - item.effectEnd)} 경과`;
+}
+
 function formatAmount(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return "0";
@@ -667,6 +818,8 @@ function formatAmount(value) {
 
 function normalizeItem(item) {
   if (!item || typeof item !== "object") return null;
+  const preset = defaultItems.find((candidate) => candidate.id === item.id) || {};
+  const effectType = item.effectType === "steady-state" ? "steady-state" : "same-day";
   return {
     id: String(item.id || crypto.randomUUID()),
     name: String(item.name || "항목"),
@@ -676,6 +829,14 @@ function normalizeItem(item) {
     time: /^\d{2}:\d{2}$/.test(item.time) ? item.time : "08:00",
     halfLife: clamp(Number(item.halfLife), 0.05, 240),
     peakTime: clamp(Number(item.peakTime), 0.05, 72),
+    effectType,
+    effectStart: clamp(Number(item.effectStart ?? preset.effectStart ?? 1), 0, 240),
+    effectEnd: clamp(Number(item.effectEnd ?? preset.effectEnd ?? 8), 0, 720),
+    steadyState: clamp(Number(item.steadyState ?? preset.steadyState ?? 0), 0, 1000),
+    confidence: String(item.confidence || preset.confidence || "직접입력"),
+    evidenceLabel: String(item.evidenceLabel || preset.evidenceLabel || "사용자 입력"),
+    evidenceUrl: String(item.evidenceUrl || preset.evidenceUrl || ""),
+    evidenceSummary: String(item.evidenceSummary || preset.evidenceSummary || "사용자가 직접 입력한 값입니다."),
     color: /^#[0-9a-f]{6}$/i.test(item.color) ? item.color : "#1f8f83",
     note: String(item.note || ""),
   };
