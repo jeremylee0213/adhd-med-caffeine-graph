@@ -31,10 +31,14 @@
             </button>
           </div>
 
-          <label class="field">
-            <span>🕒 현재 시각</span>
-            <input id="currentTime" type="time" />
-          </label>
+          <div class="field current-time-field">
+            <span>🕒 자동 현재 시각</span>
+            <div id="currentTime" class="clock-card" role="status" aria-live="polite" aria-label="자동 현재 시각">
+              <i aria-hidden="true">🕒</i>
+              <b id="currentTimeValue">--:--</b>
+              <small id="currentTimeDetail">⏱️ 현재 시간 자동 추적</small>
+            </div>
+          </div>
 
           <label class="field">
             <span>⏱️ 그래프 시간</span>
@@ -86,7 +90,7 @@
 
           <div class="legend">
             <div id="legendItems" class="legend-items"></div>
-            <span><i class="line-current"></i>현재 시각</span>
+            <span><i class="line-current"></i>🕒 자동 현재 시각</span>
             <span><i class="line-half"></i>50% 기준</span>
             <span><i class="line-effect"></i>약효·각성 구간</span>
           </div>

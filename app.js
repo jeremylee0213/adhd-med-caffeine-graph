@@ -112,6 +112,8 @@ const state = {
 
 const els = {
   currentTime: document.querySelector("#currentTime"),
+  currentTimeValue: document.querySelector("#currentTimeValue"),
+  currentTimeDetail: document.querySelector("#currentTimeDetail"),
   durationHours: document.querySelector("#durationHours"),
   resetButton: document.querySelector("#resetButton"),
   restoreButton: document.querySelector("#restoreButton"),
@@ -135,25 +137,14 @@ let lastChart = null;
 
 function init() {
   loadState();
-  if (!state.currentTime) {
-    const now = new Date();
-    state.currentTime = `${String(now.getHours()).padStart(2, "0")}:${String(
-      now.getMinutes(),
-    ).padStart(2, "0")}`;
-  }
-  els.currentTime.value = state.currentTime;
+  syncCurrentTime(false);
   els.durationHours.value = state.durationHours;
   bindEvents();
   render();
+  window.setInterval(() => syncCurrentTime(true), 1000);
 }
 
 function bindEvents() {
-  els.currentTime.addEventListener("input", () => {
-    state.currentTime = els.currentTime.value || "00:00";
-    saveState();
-    render();
-  });
-
   els.durationHours.addEventListener("input", () => {
     if (els.durationHours.value === "") return;
     setDuration(Number(els.durationHours.value));
@@ -214,9 +205,27 @@ function saveState() {
     JSON.stringify({
       items: state.items,
       durationHours: state.durationHours,
-      currentTime: state.currentTime,
     }),
   );
+}
+
+function syncCurrentTime(shouldRender) {
+  const now = new Date();
+  const nextTime = formatTimeInput(now);
+  const minuteChanged = state.currentTime !== nextTime;
+  state.currentTime = nextTime;
+  renderClock(now);
+  if (shouldRender && minuteChanged) {
+    render();
+  }
+}
+
+function renderClock(now) {
+  if (!els.currentTimeValue || !els.currentTimeDetail) return;
+  const seconds = String(now.getSeconds()).padStart(2, "0");
+  const weekday = new Intl.DateTimeFormat("ko-KR", { weekday: "short" }).format(now);
+  els.currentTimeValue.textContent = formatDisplayTime(now);
+  els.currentTimeDetail.textContent = `📍 ${weekday} · ${seconds}초 · 그래프 자동 이동`;
 }
 
 function restoreDefaults() {
@@ -767,12 +776,74 @@ function drawCurrentMarker(x, pad, plotH, startHour) {
   const currentAt = currentAbsoluteHour(startHour) - startHour;
   if (currentAt < 0 || currentAt > state.durationHours) return;
   const px = x(currentAt);
-  ctx.strokeStyle = "#d98c23";
+  const markerTop = pad.top;
+  const markerBottom = pad.top + plotH;
+
+  ctx.save();
+  ctx.setLineDash([7, 5]);
+  ctx.strokeStyle = "rgba(255, 255, 255, 0.95)";
+  ctx.lineWidth = 8;
+  ctx.beginPath();
+  ctx.moveTo(px, markerTop);
+  ctx.lineTo(px, markerBottom);
+  ctx.stroke();
+
+  ctx.strokeStyle = "#f08a24";
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(px, markerTop);
+  ctx.lineTo(px, markerBottom);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const label = `🕒 지금 ${state.currentTime || formatClock(currentAbsoluteHour(startHour))}`;
+  ctx.font = "900 13px Inter, system-ui, sans-serif";
+  const bubbleW = Math.min(148, Math.max(110, ctx.measureText(label).width + 22));
+  const bubbleH = 30;
+  const bubbleX = clamp(px - bubbleW / 2, pad.left + 4, els.chartCanvas.getBoundingClientRect().width - pad.right - bubbleW - 4);
+  const bubbleY = markerTop + 8;
+
+  ctx.fillStyle = "#fff3df";
+  ctx.strokeStyle = "#f08a24";
+  ctx.lineWidth = 2;
+  drawRoundRect(bubbleX, bubbleY, bubbleW, bubbleH, 10);
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#8d4d07";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText(label, bubbleX + bubbleW / 2, bubbleY + bubbleH / 2);
+
+  ctx.fillStyle = "#f08a24";
+  ctx.beginPath();
+  ctx.moveTo(px, bubbleY + bubbleH + 8);
+  ctx.lineTo(px - 7, bubbleY + bubbleH - 1);
+  ctx.lineTo(px + 7, bubbleY + bubbleH - 1);
+  ctx.closePath();
+  ctx.fill();
+
+  ctx.strokeStyle = "#8d4d07";
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(px, pad.top);
-  ctx.lineTo(px, pad.top + plotH);
+  ctx.arc(px, markerBottom - 12, 7, 0, Math.PI * 2);
   ctx.stroke();
+  ctx.restore();
+}
+
+function drawRoundRect(x, y, width, height, radius) {
+  const r = Math.min(radius, width / 2, height / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + width - r, y);
+  ctx.quadraticCurveTo(x + width, y, x + width, y + r);
+  ctx.lineTo(x + width, y + height - r);
+  ctx.quadraticCurveTo(x + width, y + height, x + width - r, y + height);
+  ctx.lineTo(x + r, y + height);
+  ctx.quadraticCurveTo(x, y + height, x, y + height - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
 }
 
 function drawHover(data, x, y, pad, plotW, plotH, startHour) {
@@ -939,6 +1010,18 @@ function currentAbsoluteHour(startHour) {
 function timeToHours(value) {
   const [hours = "0", minutes = "0"] = value.split(":");
   return Number(hours) + Number(minutes) / 60;
+}
+
+function formatTimeInput(date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function formatDisplayTime(date) {
+  const hours = date.getHours();
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const period = hours < 12 ? "오전" : "오후";
+  const displayHour = hours % 12 || 12;
+  return `${period} ${String(displayHour).padStart(2, "0")}:${minutes}`;
 }
 
 function formatClock(hour) {
