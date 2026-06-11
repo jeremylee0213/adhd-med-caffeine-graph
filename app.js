@@ -32,7 +32,7 @@ const defaultItems = [
     evidenceLabel: "DailyMed + Modi 2000 OROS PK",
     evidenceUrl: "https://accp1.onlinelibrary.wiley.com/doi/10.1177/00912700022009431",
     evidenceSummary: "22% 즉시방출 + 78% ascending release. Tmax 6-10h, t1/2 3.5h. 효과 1-12.5h 관찰. CES1 G143E SNP가 PK에 영향.",
-    color: "#1f8f83",
+    color: "#3182f6",
     note: "methylphenidate OROS (Modi 2000)",
   },
   {
@@ -53,7 +53,7 @@ const defaultItems = [
     evidenceLabel: "DailyMed Abilify",
     evidenceUrl: "https://dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=6875b848-8b13-45f8-ada5-69ef8aece6b6",
     evidenceSummary: "Tmax 3-5h, t1/2 75h. 활성대사체 94h, 정상상태는 약 14일.",
-    color: "#6f63d8",
+    color: "#6366f1",
     note: "aripiprazole",
   },
   {
@@ -74,7 +74,7 @@ const defaultItems = [
     evidenceLabel: "DailyMed + SSRI 리뷰",
     evidenceUrl: "https://www.dailymed.nlm.nih.gov/dailymed/drugInfo.cfm?setid=5088d6cd-ec13-384d-e063-6394a90aee05",
     evidenceSummary: "Tmax 약 5h, t1/2 27-32h, 정상상태 약 1주. 임상 효과 평가는 보통 주 단위.",
-    color: "#d98c23",
+    color: "#4e5968",
     note: "escitalopram 가정",
   },
   {
@@ -95,12 +95,12 @@ const defaultItems = [
     evidenceLabel: "NCBI StatPearls + caffeine review",
     evidenceUrl: "https://www.ncbi.nlm.nih.gov/books/NBK519490/",
     evidenceSummary: "성인 평균 t1/2 약 5h (보고 범위 약 1.5-9.5h). 피크/체감은 개인차가 커서 흡연, 임신, 간기능, CYP1A2 영향.",
-    color: "#8b5e34",
+    color: "#6b7684",
     note: "커피 1잔 수준 예시",
   },
 ];
 
-const palette = ["#1f8f83", "#6f63d8", "#d98c23", "#8b5e34", "#2d7dd2", "#b23864"];
+const palette = ["#3182f6", "#1b64da", "#6366f1", "#4e5968", "#6b7684", "#94a3b8"];
 
 const state = {
   durationHours: 12,
@@ -657,10 +657,10 @@ function drawChart(data) {
 }
 
 function drawAxes(width, pad, plotW, plotH, x, y, startHour) {
-  ctx.strokeStyle = "#d8e2de";
+  ctx.strokeStyle = "#e5e8eb";
   ctx.lineWidth = 1;
-  ctx.fillStyle = "#63716c";
-  ctx.font = "12px Inter, system-ui, sans-serif";
+  ctx.fillStyle = "#6b7684";
+  ctx.font = "12px Pretendard, system-ui, sans-serif";
   ctx.textAlign = "right";
   ctx.textBaseline = "middle";
 
@@ -689,7 +689,7 @@ function drawAxes(width, pad, plotW, plotH, x, y, startHour) {
 function drawHalfLine(pad, plotW, y) {
   ctx.save();
   ctx.setLineDash([6, 6]);
-  ctx.strokeStyle = "#93aaa3";
+  ctx.strokeStyle = "#b0b8c1";
   ctx.beginPath();
   ctx.moveTo(pad.left, y(50));
   ctx.lineTo(pad.left + plotW, y(50));
@@ -727,7 +727,7 @@ function drawEffectWindows(x, pad, plotW, plotH, startHour) {
 
       if (!labelled && width > 56) {
         ctx.fillStyle = item.color;
-        ctx.font = "11px Inter, system-ui, sans-serif";
+        ctx.font = "11px Pretendard, system-ui, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "bottom";
         ctx.fillText(`${item.name} 약효`, xStart + width / 2, yPos - 2);
@@ -777,7 +777,7 @@ function drawPeakMarkers(x, y, startHour) {
 
       if (!labelled && index < 5) {
         ctx.fillStyle = item.color;
-        ctx.font = "12px Inter, system-ui, sans-serif";
+        ctx.font = "12px Pretendard, system-ui, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "bottom";
         ctx.fillText(item.name, px, Math.max(12, py - 10 - index * 13));
@@ -803,7 +803,7 @@ function drawCurrentMarker(x, pad, plotH, startHour) {
   ctx.lineTo(px, markerBottom);
   ctx.stroke();
 
-  ctx.strokeStyle = "#f08a24";
+  ctx.strokeStyle = "#3182f6";
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(px, markerTop);
@@ -812,25 +812,25 @@ function drawCurrentMarker(x, pad, plotH, startHour) {
   ctx.setLineDash([]);
 
   const label = `🕒 지금 ${state.currentTime || formatClock(currentAbsoluteHour(startHour))}`;
-  ctx.font = "900 13px Inter, system-ui, sans-serif";
+  ctx.font = "900 13px Pretendard, system-ui, sans-serif";
   const bubbleW = Math.min(148, Math.max(110, ctx.measureText(label).width + 22));
   const bubbleH = 30;
   const bubbleX = clamp(px - bubbleW / 2, pad.left + 4, els.chartCanvas.getBoundingClientRect().width - pad.right - bubbleW - 4);
   const bubbleY = markerTop + 8;
 
-  ctx.fillStyle = "#fff3df";
-  ctx.strokeStyle = "#f08a24";
+  ctx.fillStyle = "#e8f3ff";
+  ctx.strokeStyle = "#3182f6";
   ctx.lineWidth = 2;
   drawRoundRect(bubbleX, bubbleY, bubbleW, bubbleH, 10);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = "#8d4d07";
+  ctx.fillStyle = "#1b64da";
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
   ctx.fillText(label, bubbleX + bubbleW / 2, bubbleY + bubbleH / 2);
 
-  ctx.fillStyle = "#f08a24";
+  ctx.fillStyle = "#3182f6";
   ctx.beginPath();
   ctx.moveTo(px, bubbleY + bubbleH + 8);
   ctx.lineTo(px - 7, bubbleY + bubbleH - 1);
@@ -838,7 +838,7 @@ function drawCurrentMarker(x, pad, plotH, startHour) {
   ctx.closePath();
   ctx.fill();
 
-  ctx.strokeStyle = "#8d4d07";
+  ctx.strokeStyle = "#1b64da";
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(px, markerBottom - 12, 7, 0, Math.PI * 2);
@@ -1156,7 +1156,7 @@ function normalizeItem(item) {
     evidenceLabel: String(item.evidenceLabel || preset.evidenceLabel || "사용자 입력"),
     evidenceUrl: sanitizeUrl(item.evidenceUrl || preset.evidenceUrl || ""),
     evidenceSummary: String(item.evidenceSummary || preset.evidenceSummary || "사용자가 직접 입력한 값입니다."),
-    color: /^#[0-9a-f]{6}$/i.test(item.color) ? item.color : "#1f8f83",
+    color: /^#[0-9a-f]{6}$/i.test(item.color) ? item.color : "#3182f6",
     note: String(item.note || ""),
   };
 }
