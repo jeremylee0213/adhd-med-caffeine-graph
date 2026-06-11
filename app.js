@@ -443,7 +443,8 @@ function render() {
   const repeatCount = state.items.filter((item) => item.repeatDaily).length;
   const chronicCount = state.items.length - acuteCount;
   els.chartTitle.textContent = "약물·카페인 상대 농도·약효";
-  els.modelNote.textContent = "실선=반복 반영 상대 혈중 추정, 얇은 밴드=문헌 기반 약효·각성 구간";
+  els.modelNote.textContent =
+    "실선=반복 반영 상대 혈중 추정 (같은 이름 약물은 용량 비율로 합산), 얇은 밴드=문헌 기반 약효·각성 구간";
   els.peakBadge.textContent = `🔁 매일 반복 ${repeatCount}/${activeCount}`;
   els.halfBadge.textContent =
     chronicCount > 0 && state.durationHours < 168
@@ -646,7 +647,11 @@ function renderEditor() {
 
 function renderLegend() {
   els.legendItems.replaceChildren();
+  const seen = new Set();
   state.items.forEach((item) => {
+    const key = (item.name || "").trim() || item.id;
+    if (seen.has(key)) return;
+    seen.add(key);
     const legend = document.createElement("span");
     legend.innerHTML = `<i style="background:${item.color}"></i>${escapeHtml(item.name)}`;
     els.legendItems.append(legend);
@@ -679,9 +684,13 @@ function renderSummary() {
 
   state.items.forEach((item, index) => {
     const elapsed = elapsedHourFor(item);
-    const series = data.series.find((entry) => entry.item.id === item.id);
+    const series = data.series.find((entry) =>
+      (entry.items || [entry.item]).some((member) => member.id === item.id),
+    );
     const raw = concentrationRawAt(elapsed, item);
-    const percent = concentrationPercentAt(elapsed, item, series?.normalizer || 1);
+    // 같은 이름 그룹이면 그룹 합산 최고치 기준으로 이 복용분의 기여도를 보여준다.
+    const weightedRaw = doseWeight(item) * raw;
+    const percent = clamp((weightedRaw / Math.max(0.0001, series?.normalizer || 1)) * 100, 0, 100);
     const amountLabel = item.repeatDaily
       ? `반복지수 ${formatRatio(raw)}x`
       : `${formatAmount((item.dose * percent) / 100)}mg`;
@@ -726,23 +735,53 @@ function renderEvidence() {
   });
 }
 
+// 같은 이름의 약은 같은 성분이 몸에 쌓이는 것이므로 하나의 곡선으로 합산한다.
+function groupItems() {
+  const map = new Map();
+  state.items.forEach((item) => {
+    const key = (item.name || "").trim() || item.id;
+    if (!map.has(key)) map.set(key, { key, items: [] });
+    map.get(key).items.push(item);
+  });
+  return [...map.values()];
+}
+
+// 그룹 내 용량 차이를 반영하기 위한 가중치 (18mg + 9mg이면 2:1로 합산)
+function doseWeight(item) {
+  return Number(item.dose) > 0 ? Number(item.dose) : 1;
+}
+
 function buildChartData() {
   const step = state.durationHours <= 24 ? 0.05 : state.durationHours <= 72 ? 0.15 : 0.35;
   const startHour = referenceStartHour();
-  const series = state.items.map((item) => {
-    const isDual = item.releaseProfile === "oros-dual";
+  const series = groupItems().map((group) => {
+    const items = group.items;
+    const item = items[0];
+    const hasDual = items.some((member) => member.releaseProfile === "oros-dual");
     const rawPoints = [];
     const irRaw = [];
     const erRaw = [];
     for (let hour = 0; hour <= state.durationHours + 0.0001; hour += step) {
       const absoluteHour = startHour + hour;
-      const elapsed = absoluteHour - doseAbsoluteHour(item, startHour);
-      rawPoints.push({ hour, raw: concentrationRawAt(elapsed, item) });
-      if (isDual) {
-        irRaw.push(componentRawAt(elapsed, item, "ir"));
-        erRaw.push(componentRawAt(elapsed, item, "er"));
+      let total = 0;
+      let ir = 0;
+      let er = 0;
+      items.forEach((member) => {
+        const elapsed = absoluteHour - doseAbsoluteHour(member, startHour);
+        const weight = doseWeight(member);
+        total += weight * concentrationRawAt(elapsed, member);
+        if (member.releaseProfile === "oros-dual") {
+          ir += weight * componentRawAt(elapsed, member, "ir");
+          er += weight * componentRawAt(elapsed, member, "er");
+        }
+      });
+      rawPoints.push({ hour, raw: total });
+      if (hasDual) {
+        irRaw.push(ir);
+        erRaw.push(er);
       }
     }
+    const isDual = hasDual;
     const normalizer = Math.max(1, ...rawPoints.map((point) => point.raw));
     const points = rawPoints.map((point) => ({
       ...point,
@@ -767,7 +806,7 @@ function buildChartData() {
           },
         ]
       : [];
-    return { item, points, normalizer, components };
+    return { item, items, points, normalizer, components };
   });
   return { series, startHour };
 }
@@ -798,7 +837,7 @@ function drawChart(data) {
   drawHalfLine(pad, plotW, y);
   drawEffectWindows(x, pad, plotW, plotH, data.startHour);
   drawSeries(data, x, y);
-  drawPeakMarkers(x, y, data.startHour);
+  drawPeakMarkers(data, x, y);
   drawCurrentMarker(x, pad, plotH, data.startHour);
   drawHover(data, x, y, pad, plotW, plotH, data.startHour);
 }
@@ -935,35 +974,47 @@ function drawSeries(data, x, y) {
   });
 }
 
-function drawPeakMarkers(x, y, startHour) {
-  state.items.forEach((item, index) => {
-    const peakTime = effectivePeakTime(item);
-    const doseAt = doseAbsoluteHour(item, startHour) - startHour;
-    const lastDay = item.repeatDaily ? Math.ceil((state.durationHours - doseAt - peakTime) / 24) : 0;
+function drawPeakMarkers(data, x, y) {
+  const startHour = data.startHour;
+  data.series.forEach((series, index) => {
+    const { item, points } = series;
+    const members = series.items || [item];
+    const step = points.length > 1 ? points[1].hour - points[0].hour : 1;
     let labelled = false;
 
-    for (let day = 0; day <= lastDay; day += 1) {
-      const peakAt = doseAt + day * 24 + peakTime;
-      if (peakAt < 0 || peakAt > state.durationHours) continue;
-      const px = x(peakAt);
-      const py = y(100);
-      ctx.fillStyle = "#ffffff";
-      ctx.strokeStyle = item.color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(px, py, 5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
+    members.forEach((member) => {
+      const peakTime = effectivePeakTime(member);
+      const doseAt = doseAbsoluteHour(member, startHour) - startHour;
+      const lastDay = member.repeatDaily
+        ? Math.ceil((state.durationHours - doseAt - peakTime) / 24)
+        : 0;
 
-      if (!labelled && index < 5) {
-        ctx.fillStyle = item.color;
-        ctx.font = "12px Pretendard, system-ui, sans-serif";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "bottom";
-        ctx.fillText(item.name, px, Math.max(12, py - 10 - index * 13));
-        labelled = true;
+      for (let day = 0; day <= lastDay; day += 1) {
+        const peakAt = doseAt + day * 24 + peakTime;
+        if (peakAt < 0 || peakAt > state.durationHours) continue;
+        // 합산 곡선 위의 실제 높이에 마커를 찍는다.
+        const pointIndex = clamp(Math.round(peakAt / step), 0, points.length - 1);
+        const percent = points[pointIndex]?.percent ?? 100;
+        const px = x(peakAt);
+        const py = y(percent);
+        ctx.fillStyle = "#ffffff";
+        ctx.strokeStyle = item.color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(px, py, 5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+
+        if (!labelled && index < 5) {
+          ctx.fillStyle = item.color;
+          ctx.font = "12px Pretendard, system-ui, sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "bottom";
+          ctx.fillText(item.name, px, Math.max(12, py - 10));
+          labelled = true;
+        }
       }
-    }
+    });
   });
 }
 
@@ -1056,9 +1107,13 @@ function drawHover(data, x, y, pad, plotW, plotH, startHour) {
   ctx.stroke();
 
   const rows = data.series
-    .map(({ item, normalizer }) => {
-      const elapsed = absoluteHour - doseAbsoluteHour(item, startHour);
-      const percent = concentrationPercentAt(elapsed, item, normalizer);
+    .map(({ item, items, normalizer }) => {
+      // 같은 이름 그룹의 합산 농도를 표시한다.
+      const raw = (items || [item]).reduce((sum, member) => {
+        const elapsed = absoluteHour - doseAbsoluteHour(member, startHour);
+        return sum + doseWeight(member) * concentrationRawAt(elapsed, member);
+      }, 0);
+      const percent = clamp((raw / Math.max(0.0001, normalizer)) * 100, 0, 100);
       ctx.fillStyle = item.color;
       ctx.beginPath();
       ctx.arc(plotX, y(percent), 4, 0, Math.PI * 2);
@@ -1072,10 +1127,6 @@ function drawHover(data, x, y, pad, plotW, plotH, startHour) {
   const left = plotX > rect.width - 210 ? plotX - 200 : plotX + 12;
   els.hoverReadout.style.left = `${left}px`;
   els.hoverReadout.style.top = `${Math.max(12, y(84) - 12)}px`;
-}
-
-function concentrationPercentAt(hour, item, normalizer = 1) {
-  return clamp((concentrationRawAt(hour, item) / Math.max(0.0001, normalizer)) * 100, 0, 100);
 }
 
 function concentrationRawAt(hour, item) {
