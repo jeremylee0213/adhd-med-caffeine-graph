@@ -64,13 +64,6 @@ a {
   min-width: 0;
 }
 
-.app-label {
-  margin: 0 0 8px;
-  color: var(--teal-dark);
-  font-size: 13px;
-  font-weight: 800;
-}
-
 h1,
 h2,
 h3,
@@ -788,6 +781,10 @@ canvas {
   background: rgba(49, 130, 246, 0.18);
 }
 
+.line-component {
+  background: repeating-linear-gradient(90deg, var(--teal) 0 5px, transparent 5px 9px);
+}
+
 .summary {
   grid-column: 2;
   grid-row: 2;
@@ -947,6 +944,46 @@ canvas {
   padding-left: 18px;
   font-size: 12px;
   line-height: 1.35;
+}
+
+.term-list {
+  margin: 0 0 10px;
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.term-list dt {
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.term-list dd {
+  margin: 0 0 6px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.oros-example-title {
+  margin-bottom: 6px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+#orosExampleCanvas {
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #f9fafb;
+}
+
+.oros-example-note {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 @media (max-width: 1180px) {

@@ -141,7 +141,99 @@ function init() {
   els.durationHours.value = state.durationHours;
   bindEvents();
   render();
+  drawOrosExample();
   window.setInterval(() => syncCurrentTime(true), 1000);
+}
+
+// 설명 카드용 OROS 이중방출 예시 그래프 (콘서타 기준 고정 파라미터)
+function drawOrosExample() {
+  const canvas = document.querySelector("#orosExampleCanvas");
+  if (!canvas) return;
+  const ectx = canvas.getContext("2d");
+  const W = canvas.width;
+  const H = canvas.height;
+  const pad = { top: 28, right: 16, bottom: 32, left: 44 };
+  const plotW = W - pad.left - pad.right;
+  const plotH = H - pad.top - pad.bottom;
+  const hours = 14;
+  const halfLife = 3.5;
+  const irFraction = 0.22;
+  const irPeak = 1.5;
+  const erPeak = 6.8;
+  const kaIr = solveAbsorptionRate(halfLife, irPeak);
+  const kaEr = solveAbsorptionRate(halfLife, erPeak);
+  const irAt = (t) => irFraction * doseContribution(t, halfLife, kaIr, irPeak);
+  const erAt = (t) => (1 - irFraction) * doseContribution(t, halfLife, kaEr, erPeak);
+
+  const samples = [];
+  let maxTotal = 0;
+  for (let t = 0; t <= hours + 0.0001; t += 0.05) {
+    const ir = irAt(t);
+    const er = erAt(t);
+    samples.push({ t, ir, er, total: ir + er });
+    maxTotal = Math.max(maxTotal, ir + er);
+  }
+
+  const x = (t) => pad.left + (t / hours) * plotW;
+  const y = (v) => pad.top + plotH - (v / maxTotal) * plotH * 0.92;
+
+  ectx.clearRect(0, 0, W, H);
+
+  ectx.strokeStyle = "#e5e8eb";
+  ectx.fillStyle = "#6b7684";
+  ectx.lineWidth = 1;
+  ectx.font = "11px Pretendard, system-ui, sans-serif";
+  ectx.textAlign = "right";
+  ectx.textBaseline = "middle";
+  [0, 0.5, 1].forEach((ratio) => {
+    const py = y(maxTotal * ratio);
+    ectx.beginPath();
+    ectx.moveTo(pad.left, py);
+    ectx.lineTo(W - pad.right, py);
+    ectx.stroke();
+    ectx.fillText(`${Math.round(ratio * 100)}%`, pad.left - 6, py);
+  });
+  ectx.textAlign = "center";
+  ectx.textBaseline = "top";
+  for (let t = 0; t <= hours; t += 2) {
+    ectx.fillText(`${t}h`, x(t), pad.top + plotH + 8);
+  }
+
+  const drawCurve = (pick, color, dash, width) => {
+    ectx.save();
+    ectx.beginPath();
+    samples.forEach((sample, index) => {
+      const px = x(sample.t);
+      const py = y(pick(sample));
+      if (index === 0) ectx.moveTo(px, py);
+      else ectx.lineTo(px, py);
+    });
+    ectx.setLineDash(dash);
+    ectx.lineWidth = width;
+    ectx.strokeStyle = color;
+    ectx.lineJoin = "round";
+    ectx.stroke();
+    ectx.restore();
+  };
+
+  drawCurve((s) => s.ir, "#ff922b", [6, 5], 2);
+  drawCurve((s) => s.er, "#6366f1", [6, 5], 2);
+  drawCurve((s) => s.total, "#3182f6", [], 3);
+
+  const peakOf = (pick) =>
+    samples.reduce((best, sample) => (pick(sample) > pick(best) ? sample : best), samples[0]);
+  ectx.font = "700 11px Pretendard, system-ui, sans-serif";
+  ectx.textAlign = "center";
+  ectx.textBaseline = "bottom";
+  const irTop = peakOf((s) => s.ir);
+  ectx.fillStyle = "#d9480f";
+  ectx.fillText("IR 22% (1.5h)", x(irTop.t) + 18, y(irTop.ir) - 5);
+  const erTop = peakOf((s) => s.er);
+  ectx.fillStyle = "#4f46e5";
+  ectx.fillText("ER 78% (6.8h)", x(erTop.t), y(erTop.er) - 5);
+  const totalTop = peakOf((s) => s.total);
+  ectx.fillStyle = "#1b64da";
+  ectx.fillText("전체 = IR + ER", x(totalTop.t), y(totalTop.total) - 5);
 }
 
 function bindEvents() {
@@ -638,18 +730,44 @@ function buildChartData() {
   const step = state.durationHours <= 24 ? 0.05 : state.durationHours <= 72 ? 0.15 : 0.35;
   const startHour = referenceStartHour();
   const series = state.items.map((item) => {
+    const isDual = item.releaseProfile === "oros-dual";
     const rawPoints = [];
+    const irRaw = [];
+    const erRaw = [];
     for (let hour = 0; hour <= state.durationHours + 0.0001; hour += step) {
       const absoluteHour = startHour + hour;
       const elapsed = absoluteHour - doseAbsoluteHour(item, startHour);
       rawPoints.push({ hour, raw: concentrationRawAt(elapsed, item) });
+      if (isDual) {
+        irRaw.push(componentRawAt(elapsed, item, "ir"));
+        erRaw.push(componentRawAt(elapsed, item, "er"));
+      }
     }
     const normalizer = Math.max(1, ...rawPoints.map((point) => point.raw));
     const points = rawPoints.map((point) => ({
       ...point,
       percent: clamp((point.raw / normalizer) * 100, 0, 100),
     }));
-    return { item, points, normalizer };
+    // 이중방출은 IR/ER 구성 곡선을 같은 기준(전체 최고치)으로 정규화해 점선으로 표시한다.
+    const components = isDual
+      ? [
+          {
+            key: "IR",
+            points: rawPoints.map((point, i) => ({
+              hour: point.hour,
+              percent: clamp((irRaw[i] / normalizer) * 100, 0, 100),
+            })),
+          },
+          {
+            key: "ER",
+            points: rawPoints.map((point, i) => ({
+              hour: point.hour,
+              percent: clamp((erRaw[i] / normalizer) * 100, 0, 100),
+            })),
+          },
+        ]
+      : [];
+    return { item, points, normalizer, components };
   });
   return { series, startHour };
 }
@@ -768,7 +886,40 @@ function drawEffectWindows(x, pad, plotW, plotH, startHour) {
 }
 
 function drawSeries(data, x, y) {
-  data.series.forEach(({ item, points }) => {
+  data.series.forEach(({ item, points, components }) => {
+    (components || []).forEach((component) => {
+      ctx.save();
+      ctx.beginPath();
+      component.points.forEach((point, index) => {
+        const px = x(point.hour);
+        const py = y(point.percent);
+        if (index === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.setLineDash([6, 5]);
+      ctx.lineWidth = 1.6;
+      ctx.globalAlpha = 0.6;
+      ctx.strokeStyle = item.color;
+      ctx.lineJoin = "round";
+      ctx.stroke();
+
+      // 구성 곡선의 자기 피크 지점에 IR/ER 라벨
+      const peak = component.points.reduce(
+        (best, point) => (point.percent > best.percent ? point : best),
+        component.points[0],
+      );
+      if (peak && peak.percent > 5) {
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 0.95;
+        ctx.font = "700 10px Pretendard, system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+        ctx.fillStyle = item.color;
+        ctx.fillText(component.key, x(peak.hour), y(peak.percent) - 3);
+      }
+      ctx.restore();
+    });
+
     ctx.beginPath();
     points.forEach((point, index) => {
       const px = x(point.hour);
@@ -928,34 +1079,50 @@ function concentrationPercentAt(hour, item, normalizer = 1) {
 }
 
 function concentrationRawAt(hour, item) {
-  if (!item.repeatDaily) {
-    return singleDoseContributionAt(hour, item);
-  }
+  return sumOverRepeats(hour, item, singleDoseContributionAt);
+}
+
+// OROS 항목의 IR/ER 구성 곡선용 (반복 복용 합산 포함)
+function componentRawAt(hour, item, part) {
+  return sumOverRepeats(hour, item, (h, target) => orosPartAt(h, target, part));
+}
+
+function sumOverRepeats(hour, item, fn) {
+  if (!item.repeatDaily) return fn(hour, item);
   const lookbackDays = repeatLookbackDays(item);
   const forwardDays = Math.ceil((state.durationHours + 48) / 24);
   let total = 0;
   for (let day = -lookbackDays; day <= forwardDays; day += 1) {
-    total += singleDoseContributionAt(hour - day * 24, item);
+    total += fn(hour - day * 24, item);
   }
   return total;
 }
 
 function singleDoseContributionAt(hour, item) {
   if (hour < 0) return 0;
-  const halfLife = effectiveHalfLife(item);
   if (item.releaseProfile === "oros-dual") {
-    const irFraction = clamp(Number(item.irFraction ?? 0.22), 0, 1);
-    const erFraction = 1 - irFraction;
-    const irPeak = clamp(Number(item.irPeakTime ?? 1.5), 0.1, 12);
-    const erPeak = clamp(Number(item.erPeakTime ?? item.peakTime ?? 6.8), 0.5, 24);
-    const kaIr = solveAbsorptionRate(halfLife, irPeak);
-    const kaEr = solveAbsorptionRate(halfLife, erPeak);
-    const irPart = doseContribution(hour, halfLife, kaIr, irPeak);
-    const erPart = doseContribution(hour, halfLife, kaEr, erPeak);
-    return Math.max(0, irFraction * irPart + erFraction * erPart);
+    return orosPartAt(hour, item, "ir") + orosPartAt(hour, item, "er");
   }
+  const halfLife = effectiveHalfLife(item);
   const ka = solveAbsorptionRate(halfLife, item.peakTime);
   return Math.max(0, doseContribution(hour, halfLife, ka, item.peakTime));
+}
+
+function orosPartAt(hour, item, part) {
+  if (hour < 0) return 0;
+  const halfLife = effectiveHalfLife(item);
+  const irFraction = clamp(Number(item.irFraction ?? 0.22), 0, 1);
+  if (part === "ir") {
+    if (irFraction === 0) return 0;
+    const irPeak = clamp(Number(item.irPeakTime ?? 1.5), 0.1, 12);
+    const kaIr = solveAbsorptionRate(halfLife, irPeak);
+    return Math.max(0, irFraction * doseContribution(hour, halfLife, kaIr, irPeak));
+  }
+  const erFraction = 1 - irFraction;
+  if (erFraction === 0) return 0;
+  const erPeak = clamp(Number(item.erPeakTime ?? item.peakTime ?? 6.8), 0.5, 24);
+  const kaEr = solveAbsorptionRate(halfLife, erPeak);
+  return Math.max(0, erFraction * doseContribution(hour, halfLife, kaEr, erPeak));
 }
 
 function effectiveHalfLife(item) {
