@@ -94,7 +94,7 @@ const defaultItems = [
     confidence: "중간",
     evidenceLabel: "NCBI StatPearls + caffeine review",
     evidenceUrl: "https://www.ncbi.nlm.nih.gov/books/NBK519490/",
-    evidenceSummary: "성인 평균 t1/2 약 5h. 피크/체감은 개인차가 커서 흡연, 임신, 간기능, CYP1A2 영향.",
+    evidenceSummary: "성인 평균 t1/2 약 5h (보고 범위 약 1.5-9.5h). 피크/체감은 개인차가 커서 흡연, 임신, 간기능, CYP1A2 영향.",
     color: "#8b5e34",
     note: "커피 1잔 수준 예시",
   },
@@ -164,13 +164,13 @@ function bindEvents() {
   els.chartCanvas.addEventListener("pointermove", (event) => {
     const rect = els.chartCanvas.getBoundingClientRect();
     state.hoverX = event.clientX - rect.left;
-    renderChartOnly();
+    redrawChart();
   });
 
   els.chartCanvas.addEventListener("pointerleave", () => {
     state.hoverX = null;
     els.hoverReadout.hidden = true;
-    renderChartOnly();
+    redrawChart();
   });
 }
 
@@ -192,7 +192,6 @@ function loadState() {
     if (!saved || !Array.isArray(saved.items)) return;
     state.items = saved.items.map(normalizeItem).filter(Boolean);
     state.durationHours = clamp(Number(saved.durationHours) || 12, 1, 720);
-    state.currentTime = typeof saved.currentTime === "string" ? saved.currentTime : "";
     if (migrated) saveState();
   } catch {
     state.items = structuredClone(defaultItems);
@@ -216,7 +215,10 @@ function syncCurrentTime(shouldRender) {
   state.currentTime = nextTime;
   renderClock(now);
   if (shouldRender && minuteChanged) {
-    render();
+    // 편집 카드는 다시 만들지 않는다: 입력 중인 값과 포커스를 보존하기 위해
+    // 시간에 따라 변하는 그래프와 요약만 갱신한다.
+    renderChartOnly();
+    renderSummary();
   }
 }
 
@@ -229,6 +231,10 @@ function renderClock(now) {
 }
 
 function restoreDefaults() {
+  const confirmed = window.confirm(
+    "기본값으로 되돌리면 직접 입력한 약물·카페인 기록이 모두 삭제됩니다. 계속할까요?",
+  );
+  if (!confirmed) return;
   state.items = structuredClone(defaultItems);
   state.durationHours = 12;
   state.openEditorId = null;
@@ -298,12 +304,17 @@ function updateItem(id, key, value) {
     item.releaseProfile = value === "oros-dual" ? "oros-dual" : "single";
   } else if (key === "metabolizerPhenotype") {
     item.metabolizerPhenotype = ces1Phenotypes[value] ? value : "normal";
+  } else if (key === "evidenceUrl") {
+    item.evidenceUrl = sanitizeUrl(value);
   } else if (["dose", "halfLife", "peakTime", "effectStart", "effectEnd", "steadyState"].includes(key)) {
     item[key] = clamp(
       Number(value),
       key === "dose" || key === "steadyState" || key === "effectStart" || key === "effectEnd" ? 0 : 0.05,
       key === "halfLife" ? 240 : 1000,
     );
+    // 효과 끝이 시작보다 앞서지 않도록 자동 보정
+    if (key === "effectStart" && item.effectEnd < item.effectStart) item.effectEnd = item.effectStart;
+    if (key === "effectEnd" && item.effectEnd < item.effectStart) item.effectStart = item.effectEnd;
   } else {
     item[key] = value;
   }
@@ -527,6 +538,12 @@ function renderChartOnly() {
   drawChart(data);
 }
 
+// 데이터가 바뀌지 않은 경우(호버, 리사이즈)에는 계산 없이 다시 그리기만 한다.
+function redrawChart() {
+  if (!lastChart) lastChart = buildChartData();
+  drawChart(lastChart);
+}
+
 function renderSummary() {
   const data = lastChart ?? buildChartData();
   els.summaryList.replaceChildren();
@@ -566,8 +583,6 @@ function renderSummary() {
     <small>mg는 복용량 대비 단순 환산</small>
   `;
   els.summaryList.append(reference);
-
-  void data;
 }
 
 function renderEvidence() {
@@ -921,8 +936,19 @@ function effectiveHalfLife(item) {
   return clamp(base * phenotype.halfLifeMultiplier, 0.05, 240);
 }
 
+const peakTimeCache = new Map();
+
 function effectivePeakTime(item) {
   if (item.releaseProfile !== "oros-dual") return item.peakTime;
+  const cacheKey = [
+    effectiveHalfLife(item),
+    item.irFraction,
+    item.irPeakTime,
+    item.erPeakTime,
+    item.peakTime,
+  ].join("|");
+  const cached = peakTimeCache.get(cacheKey);
+  if (cached !== undefined) return cached;
   let bestHour = Number(item.erPeakTime) || item.peakTime || 6.8;
   let bestValue = -Infinity;
   for (let hour = 0.1; hour <= 24; hour += 0.1) {
@@ -932,11 +958,14 @@ function effectivePeakTime(item) {
       bestHour = hour;
     }
   }
-  return Number(bestHour.toFixed(2));
+  const result = Number(bestHour.toFixed(2));
+  peakTimeCache.set(cacheKey, result);
+  return result;
 }
 
 function repeatLookbackDays(item) {
-  const pharmacokineticWindow = Math.max(item.steadyState || 0, item.halfLife * 5, 24);
+  // CES1 표현형이 반영된 실효 반감기를 써야 느린 대사자의 누적이 과소평가되지 않는다.
+  const pharmacokineticWindow = Math.max(item.steadyState || 0, effectiveHalfLife(item) * 5, 24);
   return clamp(Math.ceil(pharmacokineticWindow / 24), 1, 60);
 }
 
@@ -954,7 +983,12 @@ function doseContribution(age, halfLife, ka, peakTime) {
   return Math.max(0, peakRaw ? raw / peakRaw : 0);
 }
 
+const absorptionRateCache = new Map();
+
 function solveAbsorptionRate(halfLife, peakTime) {
+  const cacheKey = `${halfLife}|${peakTime}`;
+  const cached = absorptionRateCache.get(cacheKey);
+  if (cached !== undefined) return cached;
   const ke = Math.LN2 / halfLife;
   const meanTime = 1 / ke;
   const target = Math.max(0.05, peakTime);
@@ -979,7 +1013,9 @@ function solveAbsorptionRate(halfLife, peakTime) {
     }
   }
 
-  return (lo + hi) / 2;
+  const result = (lo + hi) / 2;
+  absorptionRateCache.set(cacheKey, result);
+  return result;
 }
 
 function tmaxForRates(ka, ke) {
@@ -1118,11 +1154,17 @@ function normalizeItem(item) {
     steadyState: clamp(Number(item.steadyState ?? preset.steadyState ?? 0), 0, 1000),
     confidence: String(item.confidence || preset.confidence || "직접입력"),
     evidenceLabel: String(item.evidenceLabel || preset.evidenceLabel || "사용자 입력"),
-    evidenceUrl: String(item.evidenceUrl || preset.evidenceUrl || ""),
+    evidenceUrl: sanitizeUrl(item.evidenceUrl || preset.evidenceUrl || ""),
     evidenceSummary: String(item.evidenceSummary || preset.evidenceSummary || "사용자가 직접 입력한 값입니다."),
     color: /^#[0-9a-f]{6}$/i.test(item.color) ? item.color : "#1f8f83",
     note: String(item.note || ""),
   };
+}
+
+// javascript: 등 위험한 스킴을 막고 http/https만 허용한다.
+function sanitizeUrl(value) {
+  const url = String(value || "").trim();
+  return /^https?:\/\//i.test(url) ? url : "";
 }
 
 function clamp(value, min, max) {
@@ -1137,5 +1179,5 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;");
 }
 
-window.addEventListener("resize", () => renderChartOnly());
+window.addEventListener("resize", () => redrawChart());
 init();
