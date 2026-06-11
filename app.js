@@ -330,6 +330,21 @@ function removeItem(id) {
   render();
 }
 
+function duplicateItem(id) {
+  const index = state.items.findIndex((item) => item.id === id);
+  if (index === -1) return;
+  const source = state.items[index];
+  const clone = normalizeItem({
+    ...structuredClone(source),
+    id: crypto.randomUUID(),
+    name: `${source.name} (복제)`,
+  });
+  state.items.splice(index + 1, 0, clone);
+  state.openEditorId = clone.id;
+  saveState();
+  render();
+}
+
 function render() {
   const activeCount = state.items.length;
   const acuteCount = state.items.filter((item) => item.effectType === "same-day").length;
@@ -486,7 +501,10 @@ function renderEditor() {
           <span>🔗 출처 URL</span>
           <input data-key="evidenceUrl" aria-label="출처 URL" value="${escapeHtml(item.evidenceUrl)}" />
         </label>
-        <button class="delete-button" type="button" title="삭제" aria-label="${escapeHtml(item.name)} 삭제">🗑️ 삭제</button>
+        <div class="card-actions">
+          <button class="duplicate-button" type="button" title="복제" aria-label="${escapeHtml(item.name)} 복제">📋 복제</button>
+          <button class="delete-button" type="button" title="삭제" aria-label="${escapeHtml(item.name)} 삭제">🗑️ 삭제</button>
+        </div>
       </div>
     `;
 
@@ -510,8 +528,19 @@ function renderEditor() {
       );
     });
     card
+      .querySelector(".duplicate-button")
+      .addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        duplicateItem(item.id);
+      });
+    card
       .querySelector(".delete-button")
-      .addEventListener("click", () => removeItem(item.id));
+      .addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        removeItem(item.id);
+      });
     els.itemEditor.append(card);
   });
 
